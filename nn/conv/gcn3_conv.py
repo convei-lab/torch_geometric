@@ -3,7 +3,7 @@ from torch_geometric.typing import Adj, OptTensor, PairTensor
 
 import torch
 from torch import Tensor
-from torch.nn import Parameter
+from torch.nn import Parameter, Sigmoid
 from torch_scatter import scatter_add
 from torch_sparse import SparseTensor, matmul, fill_diag, sum, mul
 from torch_geometric.nn.conv import MessagePassing
@@ -114,7 +114,7 @@ class GCN3Conv(MessagePassing):
 
     _cached_edge_index: Optional[Tuple[Tensor, Tensor]]
     _cached_adj_t: Optional[SparseTensor]
-
+    
     def __init__(self, in_channels: int, out_channels: int,
                  improved: bool = False, cached: bool = False,
                  add_self_loops: bool = True, normalize: bool = True,
@@ -134,6 +134,8 @@ class GCN3Conv(MessagePassing):
         self._cached_adj_t = None
 
         self.weight = Parameter(torch.Tensor(in_channels, out_channels))
+        self.a = Parameter(torch.Tensor(32, 1))
+        self.sigmoid = Sigmoid()
 
         if bias:
             self.bias = Parameter(torch.Tensor(out_channels))
@@ -144,6 +146,7 @@ class GCN3Conv(MessagePassing):
 
     def reset_parameters(self):
         glorot(self.weight)
+        glorot(self.a)
         zeros(self.bias)
         self._cached_edge_index = None
         self._cached_adj_t = None
@@ -177,6 +180,21 @@ class GCN3Conv(MessagePassing):
 
         x = torch.matmul(x, self.weight)
 
+        # print('x', x, x.shape)
+
+        s = self._prepare_toptimize_input(x)
+        # print('s', s, s.shape)
+
+        s = torch.matmul(s, self.a).squeeze(2)
+        # print('a * s', s, s.shape)
+
+        e_new = self.sigmoid(s)
+        # print('e_new', e_new, e_new.shape)
+
+        # print('edge_index', edge_index, edge_index.shape)
+        # print('edge_weight', edge_weight, edge_weight.shape)
+        # input()
+
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
         out = self.propagate(edge_index, x=x, edge_weight=edge_weight,
                              size=None)
@@ -184,7 +202,7 @@ class GCN3Conv(MessagePassing):
         if self.bias is not None:
             out += self.bias
 
-        return out
+        return out, e_new
 
     def message(self, x_j: Tensor, edge_weight: OptTensor) -> Tensor:
         if edge_weight is None:
@@ -198,3 +216,15 @@ class GCN3Conv(MessagePassing):
     def __repr__(self):
         return '{}({}, {})'.format(self.__class__.__name__, self.in_channels,
                                    self.out_channels)
+
+
+    def _prepare_toptimize_input(self, x):
+        Wh = torch.clone(x)
+        N = Wh.size()[0] # number of nodes
+        
+        Wh_repeated_in_chunks = Wh.repeat_interleave(N, dim=0)
+        Wh_repeated_alternating = Wh.repeat(N, 1)
+
+        all_combinations_matrix = torch.cat([Wh_repeated_in_chunks, Wh_repeated_alternating], dim=1)
+
+        return all_combinations_matrix.view(N, N, 2 * 16)#self.out_features)
