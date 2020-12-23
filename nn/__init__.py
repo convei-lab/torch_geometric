@@ -8,7 +8,6 @@ from .pool import *  # noqa
 from .unpool import *  # noqa
 from .dense import *  # noqa
 from .models import *  # noqa
-from .link_pred import *
 
 __all__ = [
     'MetaLayer',
