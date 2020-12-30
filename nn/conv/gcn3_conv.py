@@ -1,13 +1,14 @@
+from operator import ne, neg
 from typing import Optional, Tuple
 from torch_geometric.typing import Adj, OptTensor, PairTensor
 
 import torch
 from torch import Tensor
-from torch.nn import Parameter, Sigmoid
+from torch.nn import Parameter, Sigmoid, BCEWithLogitsLoss
 from torch_scatter import scatter_add
-from torch_sparse import SparseTensor, matmul, fill_diag, sum, mul
+from torch_sparse import SparseTensor, matmul, fill_diag, sum as sparse_sum, mul
 from torch_geometric.nn.conv import MessagePassing
-from torch_geometric.utils import add_remaining_self_loops
+from torch_geometric.utils import add_remaining_self_loops, negative_sampling
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 
 from ..inits import glorot, zeros
@@ -38,7 +39,7 @@ def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False,
             adj_t = adj_t.fill_value(1., dtype=dtype)
         if add_self_loops:
             adj_t = fill_diag(adj_t, fill_value)
-        deg = sum(adj_t, dim=1)
+        deg = sparse_sum(adj_t, dim=1)
         deg_inv_sqrt = deg.pow_(-0.5)
         deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0.)
         adj_t = mul(adj_t, deg_inv_sqrt.view(-1, 1))
@@ -118,7 +119,7 @@ class GCN3Conv(MessagePassing):
     def __init__(self, in_channels: int, out_channels: int,
                  improved: bool = False, cached: bool = False,
                  add_self_loops: bool = True, normalize: bool = True,
-                 bias: bool = True, **kwargs):
+                 bias: bool = True, neg_sample_ratio: float = 1.0, **kwargs):
 
         kwargs.setdefault('aggr', 'add')
         super(GCN3Conv, self).__init__(**kwargs)
@@ -134,7 +135,7 @@ class GCN3Conv(MessagePassing):
         self._cached_adj_t = None
 
         self.weight = Parameter(torch.Tensor(in_channels, out_channels))
-        self.a = Parameter(torch.Tensor(32, 1))
+        self.a = Parameter(torch.Tensor(1, 2*out_channels))
         self.sigmoid = Sigmoid()
 
         if bias:
@@ -142,11 +143,20 @@ class GCN3Conv(MessagePassing):
         else:
             self.register_parameter('bias', None)
 
+
+        self.neg_sample_ratio = neg_sample_ratio
+        self.cache = {
+            "num_updated": 0,
+            "edge_score": None,  # Use as sij for edge score.
+            "edge_label": None,  # Use as label for sij for supervision.
+        }
+
         self.reset_parameters()
 
     def reset_parameters(self):
         glorot(self.weight)
-        torch.nn.init.xavier_uniform_(self.a, gain=torch.nn.init.calculate_gain('relu'))
+        glorot(self.a)
+        # torch.nn.init.xavier_uniform_(self.a, gain=torch.nn.init.calculate_gain('relu'))
         
         zeros(self.bias)
         self._cached_edge_index = None
@@ -180,53 +190,166 @@ class GCN3Conv(MessagePassing):
                     edge_index = cache
 
         x = torch.matmul(x, self.weight)
-
-        # print('x', x, x.shape)
-
-        s = self._prepare_toptimize_input(x)
-        # print('s', s, s.shape)
-
-        # print('self.a', self.a)
-        s = torch.matmul(s, self.a).squeeze(2)
-        # print('a * s', s, s.shape)
-
-        e_new = self.sigmoid(s)
-        # print('e_new', e_new, e_new.shape)
-
-        # print('edge_index', edge_index, edge_index.shape)
-        # print('edge_weight', edge_weight, edge_weight.shape)
-        # input()
-
-        # propagate_type: (x: Tensor, edge_weight: OptTensor)
         out = self.propagate(edge_index, x=x, edge_weight=edge_weight,
                              size=None)
 
         if self.bias is not None:
             out += self.bias
 
-        return out, e_new
+        # PyGAT style
+        # print(f'Edge index: {edge_index}, {len(edge_index[0])}')
+        # print(f'Neg edge index: {neg_edge_index}, {len(neg_edge_index[0])}')        
+        # print('x', x, x.shape)
+        # s = self._prepare_toptimize_input(out)
+        # print('s', s, s.shape)
+        # print('self.a', self.a)
+        # s = torch.matmul(s, self.a).squeeze(2)
+        # print('a * s', s, s.shape)
+        # e_new = _prepare_toptimize_input(x)
+        # print('e_new', e_new, e_new.shape)
+        # print('edge_index', edge_index, edge_index.shape)
+        # print('edge_weight', edge_weight, edge_weight.shape)
+        # input()
+
+        if self.training:
+            # Super-GAT
+            num_neg_samples = int(edge_index.size(1))
+            # print('num_neg_samples', num_neg_samples)
+
+            neg_edge_index = negative_sampling(
+                                edge_index=edge_index,
+                                num_nodes=x.size(0),
+                                num_neg_samples=num_neg_samples,
+                            )
+            # assert torch.any(torch.eq(edge_index, neg_edge_index))
+
+            # propagate_type: (x: Tensor, edge_weight: OptTensor)
+            print('edge_index', edge_index, edge_index.shape)
+            print('x', x, x.shape)
+            edge_score, edge_label = self._get_edge_and_label_with_negatives(x, edge_index, neg_edge_index)
+
+            self._update_cache("edge_score", edge_score)
+            self._update_cache("edge_label", edge_label)
+
+        return out
+
+    def _update_cache(self, key, val):
+        self.cache[key] = val
+        self.cache["num_updated"] += 1
 
     def message(self, x_j: Tensor, edge_weight: OptTensor) -> Tensor:
+        # edge_score = self._get_edge_score(x_i, x_j)
+        # self._update_cache("edge_score", edge_score)
         if edge_weight is None:
             return x_j
         else:
             return edge_weight.view(-1, 1) * x_j
 
-    def message_and_aggregate(self, adj_t: SparseTensor, x: Tensor) -> Tensor:
-        return matmul(adj_t, x, reduce=self.aggr)
+    # def message_and_aggregate(self, adj_t: SparseTensor, x: Tensor) -> Tensor:
+    #     return matmul(adj_t, x, reduce=self.aggr)
 
     def __repr__(self):
         return '{}({}, {})'.format(self.__class__.__name__, self.in_channels,
                                    self.out_channels)
 
 
-    def _prepare_toptimize_input(self, x):
-        Wh = torch.clone(x)
-        N = Wh.size()[0] # number of nodes
-        
-        Wh_repeated_in_chunks = Wh.repeat_interleave(N, dim=0)
-        Wh_repeated_alternating = Wh.repeat(N, 1)
+        # PyGAT style
+        # def _prepare_toptimize_input(self, x):
+        #     Wh = torch.clone(x)
+        #     N = Wh.size()[0] # number of nodes
+        #     Wh_repeated_in_chunks = Wh.repeat_interleave(N, dim=0)
+        #     Wh_repeated_alternating = Wh.repeat(N, 1)
+        #     all_combinations_matrix = torch.cat([Wh_repeated_in_chunks, Wh_repeated_alternating], dim=1)
+        #     return all_combinations_matrix.view(N, N, 2 * 16) #self.out_features)
+    
+    def _get_edge_score(self, x_i, x_j) -> torch.Tensor:
+        """
+        :param x_i: [E, heads, F]
+        :param x_j: [E, heads, F]
+        """
 
-        all_combinations_matrix = torch.cat([Wh_repeated_in_chunks, Wh_repeated_alternating], dim=1)
+        print('torch.cat([x_i, x_j], dim=-1)', torch.cat([x_i, x_j], dim=-1), torch.cat([x_i, x_j], dim=-1).shape)
+        print('self.a', self.a, self.a.shape)
 
-        return all_combinations_matrix.view(N, N, 2 * 16)#self.out_features)
+        # [E, F] * [1, F] -> [1, E]
+        edge_score = torch.einsum("ef,xf->e",
+                        torch.cat([x_i, x_j], dim=-1), # 26517, 32
+                        self.a) # 1, 32
+        # edge_score = torch.einsum("ef,ef->e", x_i, x_j) 
+        # edge_score = torch.matmul(torch.cat([x_i, x_j], dim=-1), self.a)
+        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        # edge_score = torch.sigmoid(s)
+
+        return edge_score
+    
+    def _get_edge_and_label_with_negatives(self, x, edge_index, neg_edge_index):
+        """
+        :param edge_index: [2, E]
+        :param neg_edge_index: [2, neg_E]]
+        :return: [E + neg_E, 1]
+        """
+
+        total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
+
+        total_edge_index_j, total_edge_index_i = total_edge_index  # [E + neg_E]
+        x_i = torch.index_select(x, 0, total_edge_index_i)  # [E + neg_E, heads * F]
+        x_j = torch.index_select(x, 0, total_edge_index_j)  # [E + neg_E, heads * F]
+
+        edge_score = self._get_edge_score(x_i, x_j)
+
+        new_edge = torch.sigmoid(edge_score)
+        print('new_edge', new_edge, new_edge.shape)
+
+        # PyGAT style
+        # mask = edge_index.T
+        # row = mask[:,0]
+        # col = mask[:,1]
+        # pos_edge_score = e_new[row, col]
+        # # print('pos_edge_score', pos_edge_score, pos_edge_score.shape)
+        # mask = neg_edge_index.T
+        # row = mask[:,0]
+        # col = mask[:,1]
+        # neg_edge_score = e_new[row, col]
+        # # print('neg_edge_score', neg_edge_score, neg_edge_score.shape)
+        # edge_score = torch.cat([pos_edge_score, neg_edge_score]).view(-1)
+
+        edge_label = torch.zeros_like(new_edge)
+        edge_label[:edge_index.size(1)] = 1
+        print('edge_label', edge_label, edge_label.shape)
+
+        return edge_score, edge_label
+
+    @staticmethod
+    def get_link_prediction_loss(model):
+
+        loss_list = []
+        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == GCN3Conv.__name__]
+
+        device = next(model.parameters()).device
+        criterion = BCEWithLogitsLoss()
+        for i, (module, cache) in enumerate(cache_list):
+            # Edge Score (X)
+            score = cache["edge_score"]  # [E + neg_E]
+            num_total_samples = score.size(0)
+
+            # Edge Labels (Y)
+            label = cache["edge_label"]  # [E + neg_E]
+
+            permuted = torch.randperm(num_total_samples)
+            permuted = permuted.to(device)
+            print('score[permuted]', score[permuted], label[permuted].shape)
+            print('label[permuted]', label[permuted], label[permuted].shape)
+            # print(label[label>0], label[label>0].shape)
+            loss = criterion(score[permuted], label[permuted])
+            loss_list.append(loss)
+            del permuted
+
+        return sum(loss_list)
+
+    @staticmethod
+    def add_link_prediction_loss(task_loss, model):
+        link_loss =  1.0 * GCN3Conv.get_link_prediction_loss(
+            model=model
+        )
+        print('Link loss', link_loss)
+        return task_loss + link_loss
