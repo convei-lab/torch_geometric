@@ -146,7 +146,8 @@ class GCN3Conv(MessagePassing):
 
     def reset_parameters(self):
         glorot(self.weight)
-        glorot(self.a)
+        torch.nn.init.xavier_uniform_(self.a, gain=torch.nn.init.calculate_gain('relu'))
+        
         zeros(self.bias)
         self._cached_edge_index = None
         self._cached_adj_t = None
@@ -185,6 +186,7 @@ class GCN3Conv(MessagePassing):
         s = self._prepare_toptimize_input(x)
         # print('s', s, s.shape)
 
+        # print('self.a', self.a)
         s = torch.matmul(s, self.a).squeeze(2)
         # print('a * s', s, s.shape)
 
