@@ -4,12 +4,14 @@ from torch_geometric.typing import Adj, OptTensor, PairTensor
 
 import torch
 from torch import Tensor
-from torch.nn import Parameter, Sigmoid, BCEWithLogitsLoss
+from torch.nn import Parameter, BCEWithLogitsLoss
 from torch_scatter import scatter_add
 from torch_sparse import SparseTensor, matmul, fill_diag, sum as sparse_sum, mul
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import add_remaining_self_loops, negative_sampling
 from torch_geometric.utils.num_nodes import maybe_num_nodes
+import torch_geometric.nn.inits as tgi
+from torch.nn import functional as F
 
 from ..inits import glorot, zeros
 
@@ -136,7 +138,12 @@ class GCN3Conv(MessagePassing):
 
         self.weight = Parameter(torch.Tensor(in_channels, out_channels))
         self.a = Parameter(torch.Tensor(1, 2*out_channels))
-        self.sigmoid = Sigmoid()
+        
+        self.r_scaling_1, self.r_bias_1 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        self.r_scaling_2, self.r_bias_2 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        self.r_scaling_3, self.r_bias_3 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        self.r_scaling_4, self.r_bias_4 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        self.r_scaling_5, self.r_bias_5 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
 
         if bias:
             self.bias = Parameter(torch.Tensor(out_channels))
@@ -149,6 +156,7 @@ class GCN3Conv(MessagePassing):
             "num_updated": 0,
             "edge_score": None,  # Use as sij for edge score.
             "edge_label": None,  # Use as label for sij for supervision.
+            "new_edge": None,
         }
 
         self.reset_parameters()
@@ -162,7 +170,13 @@ class GCN3Conv(MessagePassing):
         self._cached_edge_index = None
         self._cached_adj_t = None
 
-    def forward(self, x: Tensor, edge_index: Adj,
+        for name, param in self.named_parameters():
+            if name.startswith("r_scaling"):
+                tgi.ones(param)
+            elif name.startswith("r_bias"):
+                tgi.zeros(param)
+
+    def forward(self, x: Tensor, edge_index: Adj, denser_edge_index: Adj,
                 edge_weight: OptTensor = None) -> Tensor:
         """"""
 
@@ -213,23 +227,26 @@ class GCN3Conv(MessagePassing):
 
         if self.training:
             # Super-GAT
-            num_neg_samples = int(edge_index.size(1))
+            num_neg_samples = int(denser_edge_index.size(1))
             # print('num_neg_samples', num_neg_samples)
 
             neg_edge_index = negative_sampling(
-                                edge_index=edge_index,
+                                edge_index=denser_edge_index,
                                 num_nodes=x.size(0),
                                 num_neg_samples=num_neg_samples,
                             )
             # assert torch.any(torch.eq(edge_index, neg_edge_index))
 
             # propagate_type: (x: Tensor, edge_weight: OptTensor)
-            print('edge_index', edge_index, edge_index.shape)
-            print('x', x, x.shape)
-            edge_score, edge_label = self._get_edge_and_label_with_negatives(x, edge_index, neg_edge_index)
+            edge_score, edge_label, new_edge = self._get_edge_and_label_with_negatives(x, denser_edge_index, neg_edge_index)
 
+            print('x', x, x.shape)
+            print('denser_edge_index', denser_edge_index, denser_edge_index.shape)
+            print('new_edge_index', denser_edge_index, denser_edge_index.shape)
+            
             self._update_cache("edge_score", edge_score)
             self._update_cache("edge_label", edge_label)
+            self._update_cache("new_edge", new_edge)
 
         return out
 
@@ -272,13 +289,24 @@ class GCN3Conv(MessagePassing):
         print('self.a', self.a, self.a.shape)
 
         # [E, F] * [1, F] -> [1, E]
-        edge_score = torch.einsum("ef,xf->e",
-                        torch.cat([x_i, x_j], dim=-1), # 26517, 32
-                        self.a) # 1, 32
-        # edge_score = torch.einsum("ef,ef->e", x_i, x_j) 
+        # edge_score = torch.einsum("ef,xf->e",
+        #                 torch.cat([x_i, x_j], dim=-1), # 26517, 32
+        #                 self.a) # 1, 32
+        edge_score = torch.einsum("ef,ef->e", x_i, x_j) 
         # edge_score = torch.matmul(torch.cat([x_i, x_j], dim=-1), self.a)
         print('edge_score', edge_score, edge_score.shape) # 26517, 1
         # edge_score = torch.sigmoid(s)
+
+        edge_score = self.r_scaling_1 * F.elu(edge_score) + self.r_bias_1
+        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        edge_score = self.r_scaling_2 * F.elu(edge_score) + self.r_bias_2
+        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        edge_score = self.r_scaling_3 * F.elu(edge_score) + self.r_bias_3
+        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        edge_score = self.r_scaling_4 * F.elu(edge_score) + self.r_bias_4
+        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        edge_score = self.r_scaling_5 * F.elu(edge_score) + self.r_bias_5
+        print('edge_score', edge_score, edge_score.shape) # 26517, 1
 
         return edge_score
     
@@ -290,15 +318,44 @@ class GCN3Conv(MessagePassing):
         """
 
         total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
+        print('edge_index', edge_index, edge_index.shape)
+        print('neg_edge_index', neg_edge_index, neg_edge_index.shape)
+        print('total_edge_index', total_edge_index, total_edge_index.shape)
 
         total_edge_index_j, total_edge_index_i = total_edge_index  # [E + neg_E]
         x_i = torch.index_select(x, 0, total_edge_index_i)  # [E + neg_E, heads * F]
         x_j = torch.index_select(x, 0, total_edge_index_j)  # [E + neg_E, heads * F]
 
         edge_score = self._get_edge_score(x_i, x_j)
+        
+        edge_label = torch.zeros_like(edge_score)
+        edge_label[:edge_index.size(1)] = 1
+        print('edge_label', edge_label, edge_label.shape)
 
-        new_edge = torch.sigmoid(edge_score)
-        print('new_edge', new_edge, new_edge.shape)
+        ###########################################################################################
+        """sorted_score, indices = torch.sort(edge_score, descending=False)
+        print('sorted_score', sorted_score, sorted_score.shape)
+        print('indices', indices, indices.shape)
+
+        total_index = total_edge_index.clone()
+        sorted_index_j = total_index[0].scatter_(src=total_index[0], dim=-1, index=indices)
+        print('sorted_index_j', sorted_index_j, sorted_index_j.shape)
+        sorted_index_i = total_index[1].scatter_(src=total_index[1], dim=-1, index=indices)
+        print('sorted_index_i', sorted_index_i, sorted_index_i.shape)
+        sorted_index = torch.stack([sorted_index_j, sorted_index_i])
+        print('sorted_index', sorted_index, sorted_index.shape)
+
+        new_edge_mask = sorted_score > 0
+        print('new_edge_mask', new_edge_mask, new_edge_mask.shape)
+
+        new_edge = sorted_index[:, new_edge_mask]
+        print('new_edge', new_edge, new_edge.shape)"""
+        ############################################################################################
+
+        edge_mask = edge_score > 0
+        edge_mask = edge_mask[edge_index.size(1):]
+        new_edge = neg_edge_index[:, edge_mask]
+
 
         # PyGAT style
         # mask = edge_index.T
@@ -313,11 +370,8 @@ class GCN3Conv(MessagePassing):
         # # print('neg_edge_score', neg_edge_score, neg_edge_score.shape)
         # edge_score = torch.cat([pos_edge_score, neg_edge_score]).view(-1)
 
-        edge_label = torch.zeros_like(new_edge)
-        edge_label[:edge_index.size(1)] = 1
-        print('edge_label', edge_label, edge_label.shape)
 
-        return edge_score, edge_label
+        return edge_score, edge_label, new_edge
 
     @staticmethod
     def get_link_prediction_loss(model):
@@ -337,8 +391,7 @@ class GCN3Conv(MessagePassing):
 
             permuted = torch.randperm(num_total_samples)
             permuted = permuted.to(device)
-            print('score[permuted]', score[permuted], label[permuted].shape)
-            print('label[permuted]', label[permuted], label[permuted].shape)
+            print('score[--ermuted]', label[permuted], label[permuted].shape)
             # print(label[label>0], label[label>0].shape)
             loss = criterion(score[permuted], label[permuted])
             loss_list.append(loss)
@@ -346,10 +399,10 @@ class GCN3Conv(MessagePassing):
 
         return sum(loss_list)
 
-    @staticmethod
-    def add_link_prediction_loss(task_loss, model):
-        link_loss =  1.0 * GCN3Conv.get_link_prediction_loss(
-            model=model
-        )
-        print('Link loss', link_loss)
-        return task_loss + link_loss
+    # @staticmethod
+    # def add_link_prediction_loss(task_loss, model):
+    #     link_loss =  1.0 * GCN3Conv.get_link_prediction_loss(
+    #         model=model
+    #     )
+    #     print('Link loss', link_loss)
+    #     return task_loss + link_loss
