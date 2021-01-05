@@ -76,7 +76,7 @@ __all__ = [
     'GENConv',
     'GCN2Conv',
     'GCN3Conv',
-    'GCN4Conv'
+    'GCN4Conv',
     'TOP'
 ]
 
