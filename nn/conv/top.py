@@ -89,6 +89,7 @@ class TOP(nn.Module):
         self.r_scaling_3, self.r_bias_3 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_4, self.r_bias_4 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_5, self.r_bias_5 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        
         self.cache = {
             "num_updated": 0,
             "edge_score": None,  # Use as sij for edge score.
@@ -144,22 +145,14 @@ class TOP(nn.Module):
 
         edge_score, edge_label = self._get_edge_and_label_with_negatives(x, edge_index, neg_edge_index)
 
-        new_edge_index = self._get_new_edge(edge_score, edge_index, neg_edge_index)
+        new_edge_index, new_edge_weight = self._get_new_edge(edge_score, edge_index, neg_edge_index)
 
-        # print('x', x, x.shape)
-        # print('edge_index', edge_index, edge_index.shape)
-        # print('new_edge_index', new_edge_index, new_edge_index.shape)
         
         self._update_cache("edge_score", edge_score)
         self._update_cache("edge_label", edge_label)
         self._update_cache("new_edge", new_edge_index)
 
-        edge_index = torch.cat([edge_index, new_edge_index], dim=-1)
-        edge_weight = None
-
-        print('Final edge_index', edge_index, edge_index.shape)
-
-        return edge_index, edge_weight
+        return new_edge_index, new_edge_weight
 
     def _update_cache(self, key, val):
         self.cache[key] = val
@@ -207,9 +200,22 @@ class TOP(nn.Module):
     def _get_new_edge(self, edge_score, pos_edge_index, neg_edge_index):
 
         edge_mask = edge_score > 0
-        edge_mask = edge_mask[pos_edge_index.size(1):]
-        new_edge_index = neg_edge_index[:, edge_mask]
 
+        pos_edge_mask = edge_mask[:pos_edge_index.size(1)]
+        neg_edge_mask = edge_mask[pos_edge_index.size(1):]
+
+        # pos_edge_index = pos_edge_index[:, pos_edge_mask]
+        pos_edge_index = pos_edge_index[:, :]
+        neg_edge_index = neg_edge_index[:, neg_edge_mask]
+        neg_edge_index = neg_edge_index[:, :100]
+
+        new_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
+        new_edge_weight = None
+
+        # print('x', x, x.shape)
+        # print('edge_index', edge_index, edge_index.shape)
+        # print('new_edge_index', new_edge_index, new_edge_index.shape)
+        # print('Final edge_index', edge_index, edge_index.shape)
         """sorted_score, indices = torch.sort(edge_score, descending=False)
         print('sorted_score', sorted_score, sorted_score.shape)
         print('indices', indices, indices.shape)
@@ -228,7 +234,7 @@ class TOP(nn.Module):
         new_edge = sorted_index[:, new_edge_mask]
         print('new_edge', new_edge, new_edge.shape)"""
 
-        return new_edge_index[:,:10]
+        return new_edge_index, new_edge_weight
 
     @staticmethod
     def get_link_prediction_loss(model):
