@@ -144,6 +144,11 @@ class GCN4Conv(MessagePassing):
         self.r_scaling_3, self.r_bias_3 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_4, self.r_bias_4 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_5, self.r_bias_5 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_6, self.r_bias_6 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_7, self.r_bias_7 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_8, self.r_bias_8 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_9, self.r_bias_9 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_10, self.r_bias_10 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
 
         if bias:
             self.bias = Parameter(torch.Tensor(out_channels))
@@ -307,6 +312,11 @@ class GCN4Conv(MessagePassing):
         print('edge_score', edge_score, edge_score.shape) # 26517, 1
         edge_score = self.r_scaling_5 * F.elu(edge_score) + self.r_bias_5
         print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        # edge_score = self.r_scaling_6 * F.elu(edge_score) + self.r_bias_6
+        # edge_score = self.r_scaling_7 * F.elu(edge_score) + self.r_bias_7
+        # edge_score = self.r_scaling_8 * F.elu(edge_score) + self.r_bias_8
+        # edge_score = self.r_scaling_9 * F.elu(edge_score) + self.r_bias_9
+        # edge_score = self.r_scaling_10 * F.elu(edge_score) + self.r_bias_10
 
         return edge_score
     
@@ -351,7 +361,7 @@ class GCN4Conv(MessagePassing):
         # print('new_edge', new_edge, new_edge.shape)
         ############################################################################################
 
-        edge_mask = edge_score > 6
+        edge_mask = edge_score > 12
         edge_mask = edge_mask[edge_index.size(1):]
    
         new_edge = neg_edge_index[:, edge_mask]
