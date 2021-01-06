@@ -111,7 +111,6 @@ class TOP(nn.Module):
 
     def forward(self, x: Tensor, edge_index: Adj,
                         edge_weight: OptTensor = None):
-        print('top forward')
         if self.normalize:
             if isinstance(edge_index, Tensor):
                 cache = self._cached_edge_index
@@ -147,8 +146,6 @@ class TOP(nn.Module):
         edge_score, edge_label = self._get_edge_and_label_with_negatives(x, edge_index, neg_edge_index)
 
         new_edge_index, new_edge_weight = self._get_new_edge(edge_score, edge_index, neg_edge_index)
-
-        print("new edge cached", new_edge_index, new_edge_index.shape)
 
         self._update_cache("edge_score", edge_score)
         self._update_cache("edge_label", edge_label)
@@ -201,40 +198,32 @@ class TOP(nn.Module):
 
     def _get_new_edge(self, edge_score, pos_edge_index, neg_edge_index):
 
-        edge_mask = edge_score > 0
+        # edge_mask = edge_score > 0
 
-        pos_edge_mask = edge_mask[:pos_edge_index.size(1)]
-        neg_edge_mask = edge_mask[pos_edge_index.size(1):]
+        # neg_edge_mask = edge_mask[pos_edge_index.size(1):]
 
-        # pos_edge_index = pos_edge_index[:, pos_edge_mask]
-        pos_edge_index = pos_edge_index[:, :]
-        neg_edge_index = neg_edge_index[:, neg_edge_mask]
-        neg_edge_index = neg_edge_index[:, :100]
+        # neg_edge_index = neg_edge_index[:, neg_edge_mask]
 
-        new_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
-        new_edge_weight = None
+        # new_edge_index = neg_edge_index
+        # new_edge_weight = None
 
-        # print('x', x, x.shape)
-        # print('edge_index', edge_index, edge_index.shape)
-        # print('new_edge_index', new_edge_index, new_edge_index.shape)
-        # print('Final edge_index', edge_index, edge_index.shape)
-        """sorted_score, indices = torch.sort(edge_score, descending=False)
-        print('sorted_score', sorted_score, sorted_score.shape)
+        neg_edge_score = edge_score[pos_edge_index.size(1):]
+
+        sorted_neg_edge_score, indices = torch.sort(neg_edge_score, descending=True)
+        print('sorted_score', sorted_neg_edge_score, sorted_neg_edge_score.shape)
         print('indices', indices, indices.shape)
 
-        total_index = total_edge_index.clone()
-        sorted_index_j = total_index[0].scatter_(src=total_index[0], dim=-1, index=indices)
+        target_index = neg_edge_index.clone()
+        sorted_index_j = target_index[0].scatter_(src=target_index[0], dim=-1, index=indices)
         print('sorted_index_j', sorted_index_j, sorted_index_j.shape)
-        sorted_index_i = total_index[1].scatter_(src=total_index[1], dim=-1, index=indices)
+        sorted_index_i = target_index[1].scatter_(src=target_index[1], dim=-1, index=indices)
         print('sorted_index_i', sorted_index_i, sorted_index_i.shape)
-        sorted_index = torch.stack([sorted_index_j, sorted_index_i])
-        print('sorted_index', sorted_index, sorted_index.shape)
+        sorted_target_index = torch.stack([sorted_index_j, sorted_index_i])
+        print('sorted_target_index', sorted_target_index, sorted_target_index.shape)
 
-        new_edge_mask = sorted_score > 0
-        print('new_edge_mask', new_edge_mask, new_edge_mask.shape)
-
-        new_edge = sorted_index[:, new_edge_mask]
-        print('new_edge', new_edge, new_edge.shape)"""
+        new_edge_index = sorted_target_index[:, :1000]
+        new_edge_weight = None
+        print('new_edge_index', new_edge_index, new_edge_index.shape)
 
         return new_edge_index, new_edge_weight
 
@@ -256,7 +245,7 @@ class TOP(nn.Module):
 
             permuted = torch.randperm(num_total_samples)
             permuted = permuted.to(device)
-            print('Link pred loss: score[--ermuted]', label[permuted], label[permuted].shape)
+            # print('Link pred loss: label[permuted]', label[permuted], label[permuted].shape)
             # print(label[label>0], label[label>0].shape)
             loss = criterion(score[permuted], label[permuted])
             loss_list.append(loss)
