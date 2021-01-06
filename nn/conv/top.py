@@ -111,6 +111,7 @@ class TOP(nn.Module):
 
     def forward(self, x: Tensor, edge_index: Adj,
                         edge_weight: OptTensor = None):
+        print('top forward')
         if self.normalize:
             if isinstance(edge_index, Tensor):
                 cache = self._cached_edge_index
@@ -147,7 +148,8 @@ class TOP(nn.Module):
 
         new_edge_index, new_edge_weight = self._get_new_edge(edge_score, edge_index, neg_edge_index)
 
-        
+        print("new edge cached", new_edge_index, new_edge_index.shape)
+
         self._update_cache("edge_score", edge_score)
         self._update_cache("edge_label", edge_label)
         self._update_cache("new_edge", new_edge_index)
