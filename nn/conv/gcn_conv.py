@@ -139,7 +139,6 @@ class GCNConv(MessagePassing):
             self.bias = Parameter(torch.Tensor(out_channels))
         else:
             self.register_parameter('bias', None)
-
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -183,6 +182,8 @@ class GCNConv(MessagePassing):
 
         if self.bias is not None:
             out += self.bias
+        
+        # print('GCN', self.weight, self.bias)
 
         return out
 
