@@ -35,6 +35,7 @@ from .gcn2_conv import GCN2Conv
 from .gcn3_conv import GCN3Conv
 from .gcn4_conv import GCN4Conv
 from .top import TOP
+from .top2 import TOP2
 
 __all__ = [
     'MessagePassing',
@@ -77,7 +78,8 @@ __all__ = [
     'GCN2Conv',
     'GCN3Conv',
     'GCN4Conv',
-    'TOP'
+    'TOP',
+    'TOP2'
 ]
 
 classes = __all__

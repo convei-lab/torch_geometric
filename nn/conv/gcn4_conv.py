@@ -256,6 +256,28 @@ class GCN4Conv(MessagePassing):
         return out
 
     def _update_cache(self, key, val):
+
+        '''epoch 마다 추가
+        if key == "new_edge" and self.cache["new_edge"] == None and len(val[0]) != 0:
+            self.cache["new_edge"] = val
+        elif key == "new_edge" and self.cache["new_edge"] != None and len(val[0]) != 0:
+            prev = self.cache["new_edge"]
+            # print('prev', prev)
+            # print('prev[0]', prev[0], prev[0].shape)
+            # print('val[0]', val[0], val[0].shape)
+            a = torch.cat((prev[0], val[0]), dim=-1).unsqueeze(0)
+            # print('a', a)
+            # print('prev[1]', prev[1], prev[1].shape)
+            # print('val[1]', val[1], val[1].shape)
+            b = torch.cat((prev[1], val[1]), dim=-1).unsqueeze(0)
+            # print('b',b)
+            ab = torch.cat((a,b), dim=0)
+            # print('ab',ab)
+            self.cache["new_edge"] = ab
+
+        if key == "edge_score" or key == "edge_label":
+            self.cache[key] = val
+        '''    
         self.cache[key] = val
         self.cache["num_updated"] += 1
 
@@ -361,7 +383,7 @@ class GCN4Conv(MessagePassing):
         # print('new_edge', new_edge, new_edge.shape)
         ############################################################################################
 
-        edge_mask = edge_score > 12
+        edge_mask = edge_score > 5
         edge_mask = edge_mask[edge_index.size(1):]
    
         new_edge = neg_edge_index[:, edge_mask]
