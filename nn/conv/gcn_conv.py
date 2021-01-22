@@ -182,8 +182,6 @@ class GCNConv(MessagePassing):
 
         if self.bias is not None:
             out += self.bias
-        
-        # print('GCN', self.weight, self.bias)
 
         return out
 

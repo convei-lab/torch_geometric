@@ -39,6 +39,7 @@ from .gcn4_conv_removal import GCN4ConvRMV
 from .gcn4_conv_sigmoid import GCN4ConvSigmoid
 from .top import TOP
 from .top2 import TOP2
+from .tenet import TENET
 
 __all__ = [
     'MessagePassing',
@@ -86,6 +87,7 @@ __all__ = [
     'TOP',
     'TOP2',
     'GCN4ConvRMV',
+    'TENET',
 ]
 
 classes = __all__
