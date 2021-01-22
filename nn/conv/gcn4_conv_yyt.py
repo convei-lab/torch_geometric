@@ -68,7 +68,7 @@ def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False,
         return edge_index, deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
 
 
-class GCN4Conv(MessagePassing):
+class GCN4ConvYYT(MessagePassing):
     r"""The graph convolutional operator from the `"Semi-supervised
     Classification with Graph Convolutional Networks"
     <https://arxiv.org/abs/1609.02907>`_ paper
@@ -124,7 +124,7 @@ class GCN4Conv(MessagePassing):
                  bias: bool = True, neg_sample_ratio: float = 1.0, **kwargs):
 
         kwargs.setdefault('aggr', 'add')
-        super(GCN4Conv, self).__init__(**kwargs)
+        super(GCN4ConvYYT, self).__init__(**kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -256,28 +256,6 @@ class GCN4Conv(MessagePassing):
         return out
 
     def _update_cache(self, key, val):
-
-        '''epoch 마다 추가
-        if key == "new_edge" and self.cache["new_edge"] == None and len(val[0]) != 0:
-            self.cache["new_edge"] = val
-        elif key == "new_edge" and self.cache["new_edge"] != None and len(val[0]) != 0:
-            prev = self.cache["new_edge"]
-            # print('prev', prev)
-            # print('prev[0]', prev[0], prev[0].shape)
-            # print('val[0]', val[0], val[0].shape)
-            a = torch.cat((prev[0], val[0]), dim=-1).unsqueeze(0)
-            # print('a', a)
-            # print('prev[1]', prev[1], prev[1].shape)
-            # print('val[1]', val[1], val[1].shape)
-            b = torch.cat((prev[1], val[1]), dim=-1).unsqueeze(0)
-            # print('b',b)
-            ab = torch.cat((a,b), dim=0)
-            # print('ab',ab)
-            self.cache["new_edge"] = ab
-
-        if key == "edge_score" or key == "edge_label":
-            self.cache[key] = val
-        '''    
         self.cache[key] = val
         self.cache["num_updated"] += 1
 
@@ -383,7 +361,7 @@ class GCN4Conv(MessagePassing):
         # print('new_edge', new_edge, new_edge.shape)
         ############################################################################################
 
-        edge_mask = edge_score > 10
+        edge_mask = edge_score > 12
         edge_mask = edge_mask[edge_index.size(1):]
    
         new_edge = neg_edge_index[:, edge_mask]
@@ -409,7 +387,7 @@ class GCN4Conv(MessagePassing):
     def get_link_prediction_loss(model):
 
         loss_list = []
-        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == GCN4Conv.__name__]
+        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == GCN4ConvYYT.__name__]
 
         device = next(model.parameters()).device
         criterion = BCEWithLogitsLoss()

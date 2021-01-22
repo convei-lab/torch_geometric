@@ -68,7 +68,7 @@ def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False,
         return edge_index, deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
 
 
-class GCN4Conv(MessagePassing):
+class GCN4ConvRMV(MessagePassing):
     r"""The graph convolutional operator from the `"Semi-supervised
     Classification with Graph Convolutional Networks"
     <https://arxiv.org/abs/1609.02907>`_ paper
@@ -124,7 +124,7 @@ class GCN4Conv(MessagePassing):
                  bias: bool = True, neg_sample_ratio: float = 1.0, **kwargs):
 
         kwargs.setdefault('aggr', 'add')
-        super(GCN4Conv, self).__init__(**kwargs)
+        super(GCN4ConvRMV, self).__init__(**kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -162,6 +162,7 @@ class GCN4Conv(MessagePassing):
             "edge_score": None,  # Use as sij for edge score.
             "edge_label": None,  # Use as label for sij for supervision.
             "new_edge": None,
+            "del_edge": None,
         }
 
         self.reset_parameters()
@@ -243,7 +244,7 @@ class GCN4Conv(MessagePassing):
             # assert torch.any(torch.eq(edge_index, neg_edge_index))
 
             # propagate_type: (x: Tensor, edge_weight: OptTensor)
-            edge_score, edge_label, new_edge = self._get_edge_and_label_with_negatives(x, denser_edge_index, neg_edge_index)
+            edge_score, edge_label, new_edge, del_edge = self._get_new_edge(x, denser_edge_index, neg_edge_index)
 
             print('x', x, x.shape)
             print('denser_edge_index', denser_edge_index, denser_edge_index.shape)
@@ -252,32 +253,11 @@ class GCN4Conv(MessagePassing):
             self._update_cache("edge_score", edge_score)
             self._update_cache("edge_label", edge_label)
             self._update_cache("new_edge", new_edge)
+            self._update_cache("del_edge", del_edge)
 
         return out
 
     def _update_cache(self, key, val):
-
-        '''epoch 마다 추가
-        if key == "new_edge" and self.cache["new_edge"] == None and len(val[0]) != 0:
-            self.cache["new_edge"] = val
-        elif key == "new_edge" and self.cache["new_edge"] != None and len(val[0]) != 0:
-            prev = self.cache["new_edge"]
-            # print('prev', prev)
-            # print('prev[0]', prev[0], prev[0].shape)
-            # print('val[0]', val[0], val[0].shape)
-            a = torch.cat((prev[0], val[0]), dim=-1).unsqueeze(0)
-            # print('a', a)
-            # print('prev[1]', prev[1], prev[1].shape)
-            # print('val[1]', val[1], val[1].shape)
-            b = torch.cat((prev[1], val[1]), dim=-1).unsqueeze(0)
-            # print('b',b)
-            ab = torch.cat((a,b), dim=0)
-            # print('ab',ab)
-            self.cache["new_edge"] = ab
-
-        if key == "edge_score" or key == "edge_label":
-            self.cache[key] = val
-        '''    
         self.cache[key] = val
         self.cache["num_updated"] += 1
 
@@ -342,7 +322,7 @@ class GCN4Conv(MessagePassing):
 
         return edge_score
     
-    def _get_edge_and_label_with_negatives(self, x, edge_index, neg_edge_index):
+    def _get_new_edge(self, x, edge_index, neg_edge_index):
         """
         :param edge_index: [2, E]
         :param neg_edge_index: [2, neg_E]]
@@ -364,52 +344,21 @@ class GCN4Conv(MessagePassing):
         edge_label[:edge_index.size(1)] = 1
         print('edge_label', edge_label, edge_label.shape)
 
-        ###########################################################################################
-        # sorted_score, indices = torch.sort(edge_score, descending=False)
-        # print('sorted_score', sorted_score, sorted_score.shape)
-        # print('indices', indices, indices.shape)
-
-        # total_index = total_edge_index.clone()
-        # sorted_index_j = total_index[0].scatter_(src=total_index[0], dim=-1, index=indices)
-        # print('sorted_index_j', sorted_index_j, sorted_index_j.shape)
-        # sorted_index_i = total_index[1].scatter_(src=total_index[1], dim=-1, index=indices)
-        # print('sorted_index_i', sorted_index_i, sorted_index_i.shape)
-        # sorted_index = torch.stack([sorted_index_j, sorted_index_i])
-        # print('sorted_index', sorted_index, sorted_index.shape)
-
-        # new_edge_mask = sorted_score > 0
-        # print('new_edge_mask', new_edge_mask, new_edge_mask.shape)
-        # new_edge = sorted_index[:, new_edge_mask]
-        # print('new_edge', new_edge, new_edge.shape)
-        ############################################################################################
-
         edge_mask = edge_score > 10
         edge_mask = edge_mask[edge_index.size(1):]
-   
         new_edge = neg_edge_index[:, edge_mask]
 
+        edge_mask = edge_score < -1
+        edge_mask = edge_mask[:edge_index.size(1)]
+        del_edge = edge_index[:, edge_mask]
 
-        # PyGAT style
-        # mask = edge_index.T
-        # row = mask[:,0]
-        # col = mask[:,1]
-        # pos_edge_score = e_new[row, col]
-        # # print('pos_edge_score', pos_edge_score, pos_edge_score.shape)
-        # mask = neg_edge_index.T
-        # row = mask[:,0]
-        # col = mask[:,1]
-        # neg_edge_score = e_new[row, col]
-        # # print('neg_edge_score', neg_edge_score, neg_edge_score.shape)
-        # edge_score = torch.cat([pos_edge_score, neg_edge_score]).view(-1)
-
-
-        return edge_score, edge_label, new_edge
+        return edge_score, edge_label, new_edge, del_edge
 
     @staticmethod
     def get_link_prediction_loss(model):
 
         loss_list = []
-        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == GCN4Conv.__name__]
+        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == GCN4ConvRMV.__name__]
 
         device = next(model.parameters()).device
         criterion = BCEWithLogitsLoss()

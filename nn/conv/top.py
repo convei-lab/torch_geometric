@@ -72,8 +72,7 @@ class TOP(nn.Module):
     _cached_adj_t: Optional[SparseTensor]
     
     def __init__(self, improved: bool = False, cached: bool = False,
-                 add_self_loops: bool = True, normalize: bool = True, 
-                 after_link_prediction = False, **kwargs):
+                 add_self_loops: bool = True, normalize: bool = True, **kwargs):
 
         super(TOP, self).__init__(**kwargs)
 
@@ -81,11 +80,10 @@ class TOP(nn.Module):
         self.cached = cached
         self.add_self_loops = add_self_loops
         self.normalize = normalize
-        self.after_link_prediction = after_link_prediction
 
         self._cached_edge_index = None
         self._cached_adj_t = None
-        
+
         self.r_scaling_1, self.r_bias_1 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_2, self.r_bias_2 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_3, self.r_bias_3 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
@@ -135,33 +133,29 @@ class TOP(nn.Module):
                         self._cached_adj_t = edge_index
                 else:
                     edge_index = cache
-        
-        if self.after_link_prediction:
-            num_neg_samples = int(edge_index.size(1))
+    
+        num_neg_samples = int(edge_index.size(1))
 
-            neg_edge_index = negative_sampling(
-                                edge_index=edge_index,
-                                num_nodes=x.size(0),
-                                num_neg_samples=num_neg_samples,
-                            )
+        neg_edge_index = negative_sampling(
+                            edge_index=edge_index,
+                            num_nodes=x.size(0),
+                            num_neg_samples=num_neg_samples,
+                        )
 
-            edge_score, edge_label = self._get_edge_and_label_with_negatives(x, edge_index, neg_edge_index)
+        edge_score, edge_label = self._get_edge_and_label_with_negatives(x, edge_index, neg_edge_index)
 
-            new_edge_index, new_edge_weight = self._get_new_edge(edge_score, edge_index, neg_edge_index)
+        new_edge_index, new_edge_weight = self._get_new_edge(edge_score, edge_index, neg_edge_index)
 
-            self._update_cache("edge_score", edge_score)
-            self._update_cache("edge_label", edge_label)
-            self._update_cache("new_edge", new_edge_index)
+        self._update_cache("edge_score", edge_score)
+        self._update_cache("edge_label", edge_label)
+        self._update_cache("new_edge", new_edge_index)
 
-            print('new_edge_index', new_edge_index, new_edge_index.shape)
-            print('edge_index', edge_index, edge_index.shape)
+        # print('new_edge_index', new_edge_index, new_edge_index.shape)
+        # print('edge_index', edge_index, edge_index.shape)
 
-            added_edge_index = torch.cat([edge_index, new_edge_index], dim=-1)
-            added_edge_weight = new_edge_weight
-            print('added_edge_index', added_edge_index, added_edge_index.shape)
-        else:
-            added_edge_index = edge_index
-            added_edge_weight = edge_weight
+        added_edge_index = torch.cat([edge_index, new_edge_index], dim=-1)
+        added_edge_weight = new_edge_weight
+        # print('added_edge_index', added_edge_index, added_edge_index.shape)
 
         return added_edge_index, added_edge_weight
 
@@ -186,8 +180,7 @@ class TOP(nn.Module):
         edge_score = self.r_scaling_4 * F.elu(edge_score) + self.r_bias_4
         edge_score = self.r_scaling_5 * F.elu(edge_score) + self.r_bias_5
 
-
-        print('TOP', self.r_scaling_1, self.r_bias_1)
+        # print('TOP', self.r_scaling_1, self.r_bias_1)
 
         return edge_score
     
@@ -229,7 +222,7 @@ class TOP(nn.Module):
         # new_edge_index = sorted_target_index[:, :15]
         # new_edge_weight = None
 
-        print('new_edge_index', new_edge_index, new_edge_index.shape)
+        # print('new_edge_index', new_edge_index, new_edge_index.shape)
 
         return new_edge_index, new_edge_weight
 
