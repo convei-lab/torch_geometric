@@ -34,7 +34,11 @@ from .gen_conv import GENConv
 from .gcn2_conv import GCN2Conv
 from .gcn3_conv import GCN3Conv
 from .gcn4_conv import GCN4Conv
+from .gcn4_conv_yyt import GCN4ConvYYT
+from .gcn4_conv_removal import GCN4ConvRMV
+from .gcn4_conv_sigmoid import GCN4ConvSigmoid
 from .top import TOP
+from .top2 import TOP2
 
 __all__ = [
     'MessagePassing',
@@ -77,7 +81,11 @@ __all__ = [
     'GCN2Conv',
     'GCN3Conv',
     'GCN4Conv',
-    'TOP'
+    'GCN4ConvYYT',
+    'GCN4ConvSigmoid',
+    'TOP',
+    'TOP2',
+    'GCN4ConvRMV',
 ]
 
 classes = __all__

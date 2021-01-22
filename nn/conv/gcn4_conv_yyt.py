@@ -68,7 +68,7 @@ def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False,
         return edge_index, deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
 
 
-class GCN4Conv(MessagePassing):
+class GCN4ConvYYT(MessagePassing):
     r"""The graph convolutional operator from the `"Semi-supervised
     Classification with Graph Convolutional Networks"
     <https://arxiv.org/abs/1609.02907>`_ paper
@@ -124,7 +124,7 @@ class GCN4Conv(MessagePassing):
                  bias: bool = True, neg_sample_ratio: float = 1.0, **kwargs):
 
         kwargs.setdefault('aggr', 'add')
-        super(GCN4Conv, self).__init__(**kwargs)
+        super(GCN4ConvYYT, self).__init__(**kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -361,7 +361,7 @@ class GCN4Conv(MessagePassing):
         # print('new_edge', new_edge, new_edge.shape)
         ############################################################################################
 
-        edge_mask = edge_score > 10
+        edge_mask = edge_score > 12
         edge_mask = edge_mask[edge_index.size(1):]
    
         new_edge = neg_edge_index[:, edge_mask]
@@ -387,7 +387,7 @@ class GCN4Conv(MessagePassing):
     def get_link_prediction_loss(model):
 
         loss_list = []
-        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == GCN4Conv.__name__]
+        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == GCN4ConvYYT.__name__]
 
         device = next(model.parameters()).device
         criterion = BCEWithLogitsLoss()

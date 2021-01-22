@@ -14,76 +14,12 @@ import torch_geometric.nn.inits as tgi
 from torch.nn import functional as F
 
 
-@torch.jit._overload
-def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False,
-             add_self_loops=True, dtype=None):
-    # type: (Tensor, OptTensor, Optional[int], bool, bool, Optional[int]) -> PairTensor  # noqa
-    pass
-
-
-@torch.jit._overload
-def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False,
-             add_self_loops=False, dtype=None):
-    # type: (SparseTensor, OptTensor, Optional[int], bool, bool, Optional[int]) -> SparseTensor  # noqa
-    pass
-
-
-def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False,
-             add_self_loops=True, dtype=None):
-
-    fill_value = 2. if improved else 1.
-
-    if isinstance(edge_index, SparseTensor):
-        adj_t = edge_index
-        if not adj_t.has_value():
-            adj_t = adj_t.fill_value(1., dtype=dtype)
-        if add_self_loops:
-            adj_t = fill_diag(adj_t, fill_value)
-        deg = sparse_sum(adj_t, dim=1)
-        deg_inv_sqrt = deg.pow_(-0.5)
-        deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0.)
-        adj_t = mul(adj_t, deg_inv_sqrt.view(-1, 1))
-        adj_t = mul(adj_t, deg_inv_sqrt.view(1, -1))
-        return adj_t
-
-    else:
-        num_nodes = maybe_num_nodes(edge_index, num_nodes)
-
-        if edge_weight is None:
-            edge_weight = torch.ones((edge_index.size(1), ), dtype=dtype,
-                                     device=edge_index.device)
-
-        if add_self_loops:
-            edge_index, tmp_edge_weight = add_remaining_self_loops(
-                edge_index, edge_weight, fill_value, num_nodes)
-            assert tmp_edge_weight is not None
-            edge_weight = tmp_edge_weight
-
-        row, col = edge_index[0], edge_index[1]
-        deg = scatter_add(edge_weight, col, dim=0, dim_size=num_nodes)
-        deg_inv_sqrt = deg.pow_(-0.5)
-        deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
-        return edge_index, deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
-
-
-class TOP(nn.Module):
-
-    _cached_edge_index: Optional[Tuple[Tensor, Tensor]]
-    _cached_adj_t: Optional[SparseTensor]
+class TOP2(nn.Module):
     
-    def __init__(self, improved: bool = False, cached: bool = False,
-                 add_self_loops: bool = True, normalize: bool = True, **kwargs):
+    def __init__(self, **kwargs):
 
-        super(TOP, self).__init__(**kwargs)
-
-        self.improved = improved
-        self.cached = cached
-        self.add_self_loops = add_self_loops
-        self.normalize = normalize
-
-        self._cached_edge_index = None
-        self._cached_adj_t = None
-
+        super(TOP2, self).__init__(**kwargs)
+        
         self.r_scaling_1, self.r_bias_1 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_2, self.r_bias_2 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_3, self.r_bias_3 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
@@ -100,39 +36,13 @@ class TOP(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        self._cached_edge_index = None
-        self._cached_adj_t = None
-
         for name, param in self.named_parameters():
             if name.startswith("r_scaling"):
                 tgi.ones(param)
             elif name.startswith("r_bias"):
                 tgi.zeros(param)
 
-    def forward(self, x: Tensor, edge_index: Adj,
-                        edge_weight: OptTensor = None):
-        if self.normalize:
-            if isinstance(edge_index, Tensor):
-                cache = self._cached_edge_index
-                if cache is None:
-                    edge_index, edge_weight = gcn_norm(  # yapf: disable
-                        edge_index, edge_weight, x.size(-2),
-                        self.improved, self.add_self_loops, dtype=x.dtype)
-                    if self.cached:
-                        self._cached_edge_index = (edge_index, edge_weight)
-                else:
-                    edge_index, edge_weight = cache[0], cache[1]
-
-            elif isinstance(edge_index, SparseTensor):
-                cache = self._cached_adj_t
-                if cache is None:
-                    edge_index = gcn_norm(  # yapf: disable
-                        edge_index, edge_weight, x.size(-2),
-                        self.improved, self.add_self_loops, dtype=x.dtype)
-                    if self.cached:
-                        self._cached_adj_t = edge_index
-                else:
-                    edge_index = cache
+    def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None):
     
         num_neg_samples = int(edge_index.size(1))
 
@@ -207,7 +117,7 @@ class TOP(nn.Module):
     def _get_new_edge(self, edge_score, pos_edge_index, neg_edge_index):
 
         ###### THRESHOLD ######
-        edge_mask = edge_score > 0
+        edge_mask = edge_score > 10
         neg_edge_mask = edge_mask[pos_edge_index.size(1):]
         neg_edge_index = neg_edge_index[:, neg_edge_mask]
         new_edge_index = neg_edge_index
@@ -230,7 +140,7 @@ class TOP(nn.Module):
     def get_link_prediction_loss(model):
 
         loss_list = []
-        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == TOP.__name__]
+        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == TOP2.__name__]
 
         device = next(model.parameters()).device
         criterion = BCEWithLogitsLoss()
