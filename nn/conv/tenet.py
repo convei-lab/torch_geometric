@@ -164,10 +164,10 @@ class TENET(nn.Module):
         """
         edge_score = torch.einsum("ef,ef->e", x_i, x_j)
         edge_score = self.r_scaling_1 * F.elu(edge_score) + self.r_bias_1
-        edge_score = self.r_scaling_2 * F.elu(edge_score) + self.r_bias_2
-        edge_score = self.r_scaling_3 * F.elu(edge_score) + self.r_bias_3
-        edge_score = self.r_scaling_4 * F.elu(edge_score) + self.r_bias_4
-        edge_score = self.r_scaling_5 * F.elu(edge_score) + self.r_bias_5
+        # edge_score = self.r_scaling_2 * F.elu(edge_score) + self.r_bias_2
+        # edge_score = self.r_scaling_3 * F.elu(edge_score) + self.r_bias_3
+        # edge_score = self.r_scaling_4 * F.elu(edge_score) + self.r_bias_4
+        # edge_score = self.r_scaling_5 * F.elu(edge_score) + self.r_bias_5
         # print('TOP', self.r_scaling_1, self.r_bias_1)
         return edge_score
     
