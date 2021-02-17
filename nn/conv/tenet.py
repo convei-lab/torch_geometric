@@ -141,7 +141,7 @@ class TENET(nn.Module):
                                 num_neg_samples=num_neg_samples,
                             )
 
-            edge_score, edge_label, new_edge = self._get_edge_and_label_with_negatives(x, edge_index, neg_edge_index)
+            edge_score, edge_label, new_edge = self._get_edge_score_and_edge_label(x, edge_index, neg_edge_index)
             self._update_cache("edge_score", edge_score)
             self._update_cache("edge_label", edge_label)
             self._update_cache("new_edge", new_edge)
@@ -164,14 +164,14 @@ class TENET(nn.Module):
         """
         edge_score = torch.einsum("ef,ef->e", x_i, x_j)
         edge_score = self.r_scaling_1 * F.elu(edge_score) + self.r_bias_1
-        edge_score = self.r_scaling_2 * F.elu(edge_score) + self.r_bias_2
-        edge_score = self.r_scaling_3 * F.elu(edge_score) + self.r_bias_3
-        edge_score = self.r_scaling_4 * F.elu(edge_score) + self.r_bias_4
-        edge_score = self.r_scaling_5 * F.elu(edge_score) + self.r_bias_5
+        # edge_score = self.r_scaling_2 * F.elu(edge_score) + self.r_bias_2
+        # edge_score = self.r_scaling_3 * F.elu(edge_score) + self.r_bias_3
+        # edge_score = self.r_scaling_4 * F.elu(edge_score) + self.r_bias_4
+        # edge_score = self.r_scaling_5 * F.elu(edge_score) + self.r_bias_5
         # print('TOP', self.r_scaling_1, self.r_bias_1)
         return edge_score
     
-    def _get_edge_and_label_with_negatives(self, x, pos_edge_index, neg_edge_index):
+    def _get_edge_score_and_edge_label(self, x, pos_edge_index, neg_edge_index):
         """
         :param pos_edge_index: [2, E]
         :param neg_edge_index: [2, neg_E]]
@@ -211,3 +211,12 @@ class TENET(nn.Module):
             del permuted
 
         return sum(loss_list)
+
+    def get_edge_score(self, x, edge_index):
+
+        edge_index_j, edge_index_i = edge_index  # [E + neg_E]
+        x_i = torch.index_select(input=x, dim=0, index=edge_index_i)  # [E + neg_E, heads * F]
+        x_j = torch.index_select(input=x, dim=0, index=edge_index_j)  # [E + neg_E, heads * F]
+        edge_score = self._get_edge_score(x_i, x_j)
+
+        return edge_score
