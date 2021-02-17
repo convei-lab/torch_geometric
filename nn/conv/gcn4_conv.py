@@ -245,9 +245,9 @@ class GCN4Conv(MessagePassing):
             # propagate_type: (x: Tensor, edge_weight: OptTensor)
             edge_score, edge_label, new_edge = self._get_edge_and_label_with_negatives(x, denser_edge_index, neg_edge_index)
 
-            print('x', x, x.shape)
-            print('denser_edge_index', denser_edge_index, denser_edge_index.shape)
-            print('new_edge_index', denser_edge_index, denser_edge_index.shape)
+            # print('x', x, x.shape)
+            # print('denser_edge_index', denser_edge_index, denser_edge_index.shape)
+            # print('new_edge_index', denser_edge_index, denser_edge_index.shape)
             
             self._update_cache("edge_score", edge_score)
             self._update_cache("edge_label", edge_label)
@@ -257,22 +257,14 @@ class GCN4Conv(MessagePassing):
 
     def _update_cache(self, key, val):
 
-        '''epoch 마다 추가
+        '''#epoch 마다 추가
         if key == "new_edge" and self.cache["new_edge"] == None and len(val[0]) != 0:
             self.cache["new_edge"] = val
         elif key == "new_edge" and self.cache["new_edge"] != None and len(val[0]) != 0:
             prev = self.cache["new_edge"]
-            # print('prev', prev)
-            # print('prev[0]', prev[0], prev[0].shape)
-            # print('val[0]', val[0], val[0].shape)
             a = torch.cat((prev[0], val[0]), dim=-1).unsqueeze(0)
-            # print('a', a)
-            # print('prev[1]', prev[1], prev[1].shape)
-            # print('val[1]', val[1], val[1].shape)
             b = torch.cat((prev[1], val[1]), dim=-1).unsqueeze(0)
-            # print('b',b)
             ab = torch.cat((a,b), dim=0)
-            # print('ab',ab)
             self.cache["new_edge"] = ab
 
         if key == "edge_score" or key == "edge_label":
@@ -312,8 +304,8 @@ class GCN4Conv(MessagePassing):
         :param x_j: [E, heads, F]
         """
 
-        print('torch.cat([x_i, x_j], dim=-1)', torch.cat([x_i, x_j], dim=-1), torch.cat([x_i, x_j], dim=-1).shape)
-        print('self.a', self.a, self.a.shape)
+        # print('torch.cat([x_i, x_j], dim=-1)', torch.cat([x_i, x_j], dim=-1), torch.cat([x_i, x_j], dim=-1).shape)
+        # print('self.a', self.a, self.a.shape)
 
         # [E, F] * [1, F] -> [1, E]
         # edge_score = torch.einsum("ef,xf->e",
@@ -321,19 +313,19 @@ class GCN4Conv(MessagePassing):
         #                 self.a) # 1, 32
         edge_score = torch.einsum("ef,ef->e", x_i, x_j) 
         # edge_score = torch.matmul(torch.cat([x_i, x_j], dim=-1), self.a)
-        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        # print('edge_score', edge_score, edge_score.shape) # 26517, 1
         # edge_score = torch.sigmoid(s)
 
         edge_score = self.r_scaling_1 * F.elu(edge_score) + self.r_bias_1
-        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        # print('edge_score', edge_score, edge_score.shape) # 26517, 1
         edge_score = self.r_scaling_2 * F.elu(edge_score) + self.r_bias_2
-        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        # print('edge_score', edge_score, edge_score.shape) # 26517, 1
         edge_score = self.r_scaling_3 * F.elu(edge_score) + self.r_bias_3
-        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        # print('edge_score', edge_score, edge_score.shape) # 26517, 1/
         edge_score = self.r_scaling_4 * F.elu(edge_score) + self.r_bias_4
-        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        # print('edge_score', edge_score, edge_score.shape) # 26517, 1
         edge_score = self.r_scaling_5 * F.elu(edge_score) + self.r_bias_5
-        print('edge_score', edge_score, edge_score.shape) # 26517, 1
+        # print('edge_score', edge_score, edge_score.shape) # 26517, 1
         # edge_score = self.r_scaling_6 * F.elu(edge_score) + self.r_bias_6
         # edge_score = self.r_scaling_7 * F.elu(edge_score) + self.r_bias_7
         # edge_score = self.r_scaling_8 * F.elu(edge_score) + self.r_bias_8
@@ -350,9 +342,9 @@ class GCN4Conv(MessagePassing):
         """
 
         total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
-        print('edge_index', edge_index, edge_index.shape)
-        print('neg_edge_index', neg_edge_index, neg_edge_index.shape)
-        print('total_edge_index', total_edge_index, total_edge_index.shape)
+        # print('edge_index', edge_index, edge_index.shape)
+        # print('neg_edge_index', neg_edge_index, neg_edge_index.shape)
+        # print('total_edge_index', total_edge_index, total_edge_index.shape)
 
         total_edge_index_j, total_edge_index_i = total_edge_index  # [E + neg_E]
         x_i = torch.index_select(x, 0, total_edge_index_i)  # [E + neg_E, heads * F]
@@ -362,7 +354,7 @@ class GCN4Conv(MessagePassing):
         
         edge_label = torch.zeros_like(edge_score)
         edge_label[:edge_index.size(1)] = 1
-        print('edge_label', edge_label, edge_label.shape)
+        # print('edge_label', edge_label, edge_label.shape)
 
         ###########################################################################################
         # sorted_score, indices = torch.sort(edge_score, descending=False)
@@ -383,7 +375,7 @@ class GCN4Conv(MessagePassing):
         # print('new_edge', new_edge, new_edge.shape)
         ############################################################################################
 
-        edge_mask = edge_score > 10
+        edge_mask = edge_score > 14
         edge_mask = edge_mask[edge_index.size(1):]
    
         new_edge = neg_edge_index[:, edge_mask]
@@ -423,7 +415,7 @@ class GCN4Conv(MessagePassing):
 
             permuted = torch.randperm(num_total_samples)
             permuted = permuted.to(device)
-            print('label[--permuted]', label[permuted], label[permuted].shape)
+            # print('label[--permuted]', label[permuted], label[permuted].shape)
             # print(label[label>0], label[label>0].shape)
             loss = criterion(score[permuted], label[permuted])
             loss_list.append(loss)
