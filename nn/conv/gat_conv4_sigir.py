@@ -62,7 +62,7 @@ class GAT4ConvSIGIR(MessagePassing):
     def __init__(self, in_channels: Union[int, Tuple[int, int]],
                  out_channels: int, heads: int = 1, concat: bool = True,
                  negative_slope: float = 0.2, dropout: float = 0.,
-                 add_self_loops: bool = True, bias: bool = True, alpha=10, omega=-3, **kwargs):
+                 add_self_loops: bool = True, bias: bool = True, alpha=10, beta=-3, **kwargs):
         kwargs.setdefault('aggr', 'add')
         super(GAT4ConvSIGIR, self).__init__(node_dim=0, **kwargs)
 
@@ -92,7 +92,7 @@ class GAT4ConvSIGIR(MessagePassing):
             self.register_parameter('bias', None)
 
         self.alpha = alpha
-        self.omega = omega
+        self.beta = beta
         self.r_scaling_1, self.r_bias_1 = Parameter(
             torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_2, self.r_bias_2 = Parameter(
@@ -335,7 +335,7 @@ class GAT4ConvSIGIR(MessagePassing):
         edge_mask = edge_mask[edge_index.size(1):]
         new_edge = neg_edge_index[:, edge_mask]
 
-        edge_mask = edge_score < self.omega
+        edge_mask = edge_score < self.beta
         edge_mask = edge_mask[:edge_index.size(1)]
         del_edge = edge_index[:, edge_mask]
 
