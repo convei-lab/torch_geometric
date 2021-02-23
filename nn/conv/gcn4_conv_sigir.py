@@ -121,7 +121,7 @@ class GCN4ConvSIGIR(MessagePassing):
     def __init__(self, in_channels: int, out_channels: int,
                  improved: bool = False, cached: bool = False,
                  add_self_loops: bool = True, normalize: bool = True,
-                 bias: bool = True, alpha=10, omega=-3, **kwargs):
+                 bias: bool = True, alpha=10, beta=-3, **kwargs):
 
         kwargs.setdefault('aggr', 'add')
         super(GCN4ConvSIGIR, self).__init__(**kwargs)
@@ -143,7 +143,7 @@ class GCN4ConvSIGIR(MessagePassing):
             self.register_parameter('bias', None)
 
         self.alpha = alpha
-        self.omega = omega
+        self.beta = beta
         self.r_scaling_1, self.r_bias_1 = Parameter(
             torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_2, self.r_bias_2 = Parameter(
@@ -368,7 +368,7 @@ class GCN4ConvSIGIR(MessagePassing):
         edge_mask = edge_mask[edge_index.size(1):]
         new_edge = neg_edge_index[:, edge_mask]
 
-        edge_mask = edge_score < self.omega
+        edge_mask = edge_score < self.beta
         edge_mask = edge_mask[:edge_index.size(1)]
         del_edge = edge_index[:, edge_mask]
 
