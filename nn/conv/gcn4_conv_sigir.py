@@ -240,7 +240,7 @@ class GCN4ConvSIGIR(MessagePassing):
 
             # propagate_type: (x: Tensor, edge_weight: OptTensor)
             edge_score, edge_label, new_edge, del_edge = self._get_new_edge(
-                x, edge_index, neg_edge_index)
+                out, edge_index, neg_edge_index) #OUT
 
             # print('x', x, x.shape)
             # print('denser_edge_index', denser_edge_index, denser_edge_index.shape)
