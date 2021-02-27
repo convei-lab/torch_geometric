@@ -61,7 +61,7 @@ class GAT4ConvSIGIR(MessagePassing):
 
     def __init__(self, in_channels: Union[int, Tuple[int, int]],
                  out_channels: int, heads: int = 1, concat: bool = True,
-                 negative_slope: float = 0.2, dropout: float = 0.,
+                 negative_slope: float = 0.2, dropout: float = 0.6,
                  add_self_loops: bool = True, bias: bool = True, alpha=10, beta=-3, **kwargs):
         kwargs.setdefault('aggr', 'add')
         super(GAT4ConvSIGIR, self).__init__(node_dim=0, **kwargs)
@@ -73,6 +73,7 @@ class GAT4ConvSIGIR(MessagePassing):
         self.negative_slope = negative_slope
         self.dropout = dropout
         self.add_self_loops = add_self_loops
+        # self.weight = Parameter(torch.Tensor(in_channels, out_channels))
 
         if isinstance(in_channels, int):
             self.lin_l = Linear(in_channels, heads * out_channels, bias=False)
@@ -103,11 +104,16 @@ class GAT4ConvSIGIR(MessagePassing):
             torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_5, self.r_bias_5 = Parameter(
             torch.Tensor(1)), Parameter(torch.Tensor(1))
-        # self.r_scaling_6, self.r_bias_6 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
-        # self.r_scaling_7, self.r_bias_7 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
-        # self.r_scaling_8, self.r_bias_8 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
-        # self.r_scaling_9, self.r_bias_9 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
-        # self.r_scaling_10, self.r_bias_10 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        self.r_scaling_6, self.r_bias_6 = Parameter(
+            torch.Tensor(1)), Parameter(torch.Tensor(1))
+        self.r_scaling_7, self.r_bias_7 = Parameter(
+            torch.Tensor(1)), Parameter(torch.Tensor(1))
+        self.r_scaling_8, self.r_bias_8 = Parameter(
+            torch.Tensor(1)), Parameter(torch.Tensor(1))
+        self.r_scaling_9, self.r_bias_9 = Parameter(
+            torch.Tensor(1)), Parameter(torch.Tensor(1))
+        self.r_scaling_10, self.r_bias_10 = Parameter(
+            torch.Tensor(1)), Parameter(torch.Tensor(1))
 
         self.cache = {
             "num_updated": 0,
@@ -123,6 +129,7 @@ class GAT4ConvSIGIR(MessagePassing):
         glorot(self.lin_r.weight)
         glorot(self.att_l)
         glorot(self.att_r)
+        # glorot(self.weight)
         zeros(self.bias)
 
         for name, param in self.named_parameters():
@@ -146,7 +153,8 @@ class GAT4ConvSIGIR(MessagePassing):
                 attention weights for each edge. (default: :obj:`None`)
         """
         H, C = self.heads, self.out_channels
-
+        # x2 = torch.matmul(x, self.weight)
+        # x2 = x.clone()
         x_l: OptTensor = None
         x_r: OptTensor = None
         alpha_l: OptTensor = None
@@ -154,6 +162,8 @@ class GAT4ConvSIGIR(MessagePassing):
         if isinstance(x, Tensor):
             assert x.dim() == 2, 'Static graphs not supported in `GATConv`.'
             x_l = x_r = self.lin_l(x).view(-1, H, C)
+            # assert (x_l == x_r).all()
+            # wh = x_l.clone().view(-1, H*C)
             alpha_l = (x_l * self.att_l).sum(dim=-1)
             alpha_r = (x_r * self.att_r).sum(dim=-1)
         else:
@@ -273,7 +283,9 @@ class GAT4ConvSIGIR(MessagePassing):
         :param x_i: [E, heads, F]
         :param x_j: [E, heads, F]
         """
-
+        # print('xi', x_i)
+        # print('xj', x_j)
+        # input()
         # print('torch.cat([x_i, x_j], dim=-1)', torch.cat([x_i, x_j], dim=-1), torch.cat([x_i, x_j], dim=-1).shape)
         # print('self.a', self.a, self.a.shape)
 
@@ -296,6 +308,7 @@ class GAT4ConvSIGIR(MessagePassing):
         # print('edge_score', edge_score, edge_score.shape) # 26517, 1
         edge_score = self.r_scaling_5 * F.elu(edge_score) + self.r_bias_5
         # print('edge_score', edge_score, edge_score.shape) # 26517, 1
+
         # edge_score = self.r_scaling_6 * F.elu(edge_score) + self.r_bias_6
         # edge_score = self.r_scaling_7 * F.elu(edge_score) + self.r_bias_7
         # edge_score = self.r_scaling_8 * F.elu(edge_score) + self.r_bias_8
