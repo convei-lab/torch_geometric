@@ -195,30 +195,29 @@ class GAT4ConvSIGIR(MessagePassing):
         if self.bias is not None:
             out += self.bias
 
-        if self.training:
-            # Super-GAT
-            num_neg_samples = int(edge_index.size(1))
-            # print('num_neg_samples', num_neg_samples)
+        # Super-GAT
+        num_neg_samples = int(edge_index.size(1))
+        # print('num_neg_samples', num_neg_samples)
 
-            neg_edge_index = negative_sampling(
-                edge_index=edge_index,
-                num_nodes=x.size(0),
-                num_neg_samples=num_neg_samples,
-            )
-            # assert torch.any(torch.eq(edge_index, neg_edge_index))
+        neg_edge_index = negative_sampling(
+            edge_index=edge_index,
+            num_nodes=x.size(0),
+            num_neg_samples=num_neg_samples,
+        )
+        # assert torch.any(torch.eq(edge_index, neg_edge_index))
 
-            # propagate_type: (x: Tensor, edge_weight: OptTensor)
-            edge_score, edge_label, new_edge, del_edge = self._get_new_edge(
-                out, edge_index, neg_edge_index) # OUT 
+        # propagate_type: (x: Tensor, edge_weight: OptTensor)
+        edge_score, edge_label, new_edge, del_edge = self._get_new_edge(
+            out, edge_index, neg_edge_index)  # OUT
 
-            # print('x', x, x.shape)
-            # print('denser_edge_index', denser_edge_index, denser_edge_index.shape)
-            # print('new_edge_index', denser_edge_index, denser_edge_index.shape)
+        # print('x', x, x.shape)
+        # print('denser_edge_index', denser_edge_index, denser_edge_index.shape)
+        # print('new_edge_index', denser_edge_index, denser_edge_index.shape)
 
-            self._update_cache("edge_score", edge_score)
-            self._update_cache("edge_label", edge_label)
-            self._update_cache("new_edge", new_edge)
-            self._update_cache("del_edge", del_edge)
+        self._update_cache("edge_score", edge_score)
+        self._update_cache("edge_label", edge_label)
+        self._update_cache("new_edge", new_edge)
+        self._update_cache("del_edge", del_edge)
 
         if isinstance(return_attention_weights, bool):
             assert alpha is not None
