@@ -150,7 +150,6 @@ class GCNConv(MessagePassing):
     def forward(self, x: Tensor, edge_index: Adj,
                 edge_weight: OptTensor = None) -> Tensor:
         """"""
-
         if self.normalize:
             if isinstance(edge_index, Tensor):
                 cache = self._cached_edge_index
@@ -162,7 +161,6 @@ class GCNConv(MessagePassing):
                         self._cached_edge_index = (edge_index, edge_weight)
                 else:
                     edge_index, edge_weight = cache[0], cache[1]
-
             elif isinstance(edge_index, SparseTensor):
                 cache = self._cached_adj_t
                 if cache is None:
@@ -173,7 +171,6 @@ class GCNConv(MessagePassing):
                         self._cached_adj_t = edge_index
                 else:
                     edge_index = cache
-
         x = torch.matmul(x, self.weight)
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
