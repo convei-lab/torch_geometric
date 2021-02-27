@@ -104,16 +104,16 @@ class GAT4ConvSIGIR(MessagePassing):
             torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_5, self.r_bias_5 = Parameter(
             torch.Tensor(1)), Parameter(torch.Tensor(1))
-        self.r_scaling_6, self.r_bias_6 = Parameter(
-            torch.Tensor(1)), Parameter(torch.Tensor(1))
-        self.r_scaling_7, self.r_bias_7 = Parameter(
-            torch.Tensor(1)), Parameter(torch.Tensor(1))
-        self.r_scaling_8, self.r_bias_8 = Parameter(
-            torch.Tensor(1)), Parameter(torch.Tensor(1))
-        self.r_scaling_9, self.r_bias_9 = Parameter(
-            torch.Tensor(1)), Parameter(torch.Tensor(1))
-        self.r_scaling_10, self.r_bias_10 = Parameter(
-            torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_6, self.r_bias_6 = Parameter(
+        #     torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_7, self.r_bias_7 = Parameter(
+        #     torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_8, self.r_bias_8 = Parameter(
+        #     torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_9, self.r_bias_9 = Parameter(
+        #     torch.Tensor(1)), Parameter(torch.Tensor(1))
+        # self.r_scaling_10, self.r_bias_10 = Parameter(
+        #     torch.Tensor(1)), Parameter(torch.Tensor(1))
 
         self.cache = {
             "num_updated": 0,
@@ -153,7 +153,7 @@ class GAT4ConvSIGIR(MessagePassing):
                 attention weights for each edge. (default: :obj:`None`)
         """
         H, C = self.heads, self.out_channels
-        # x2 = torch.matmul(x, self.weight)
+        # wh = torch.matmul(x, self.weight)
         # x2 = x.clone()
         x_l: OptTensor = None
         x_r: OptTensor = None
