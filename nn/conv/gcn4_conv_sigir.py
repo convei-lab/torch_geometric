@@ -400,7 +400,7 @@ class GCN4ConvSIGIR(MessagePassing):
 
         return edge_score, edge_label, new_edge, del_edge
 
-    @staticmethod
+    @ staticmethod
     def loss(model):
 
         loss_list = []
