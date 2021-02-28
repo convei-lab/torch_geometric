@@ -73,6 +73,7 @@ class MessagePassing(torch.nn.Module):
 
         self.__user_args__ = self.inspector.keys(
             ['message', 'aggregate', 'update']).difference(self.special_args)
+
         self.__fused_user_args__ = self.inspector.keys(
             ['message_and_aggregate', 'update']).difference(self.special_args)
 
@@ -213,6 +214,7 @@ class MessagePassing(torch.nn.Module):
             **kwargs: Any additional data which is needed to construct and
                 aggregate messages, and to update node embeddings.
         """
+
         size = self.__check_input__(edge_index, size)
 
         # Run "fused" message and aggregation (if applicable).
@@ -230,10 +232,11 @@ class MessagePassing(torch.nn.Module):
 
         # Otherwise, run both functions in separation.
         elif isinstance(edge_index, Tensor) or not self.fuse:
+
             coll_dict = self.__collect__(self.__user_args__, edge_index, size,
                                          kwargs)
-
             msg_kwargs = self.inspector.distribute('message', coll_dict)
+
             out = self.message(**msg_kwargs)
 
             # For `GNNExplainer`, we require a separate message and aggregate
