@@ -211,8 +211,8 @@ class GCN4ConvSIGIR(MessagePassing):
                 else:
                     edge_index = cache
 
-        x = torch.matmul(x, self.weight)
-        out = self.propagate(edge_index, x=x, edge_weight=edge_weight,
+        wh = torch.matmul(x, self.weight)
+        out = self.propagate(edge_index, x=wh, edge_weight=edge_weight,
                              size=None)
 
         if self.bias is not None:
@@ -239,14 +239,14 @@ class GCN4ConvSIGIR(MessagePassing):
 
         neg_edge_index = negative_sampling(
             edge_index=edge_index,
-            num_nodes=x.size(0),
+            num_nodes=wh.size(0),
             num_neg_samples=num_neg_samples,
         )
         # assert torch.any(torch.eq(edge_index, neg_edge_index))
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
         edge_score, edge_label, new_edge, del_edge = self._get_new_edge(
-            out, edge_index, neg_edge_index)  # OUT
+            wh, edge_index, neg_edge_index)  # OUT
 
         # print('x', x, x.shape)
         # print('denser_edge_index', denser_edge_index, denser_edge_index.shape)

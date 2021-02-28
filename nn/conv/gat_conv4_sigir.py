@@ -160,11 +160,11 @@ class GAT4ConvSIGIR(MessagePassing):
         alpha_r: OptTensor = None
         if isinstance(x, Tensor):
             assert x.dim() == 2, 'Static graphs not supported in `GATConv`.'
-            x_l = x_r = self.lin_l(x).view(-1, H, C)
-            # assert (x_l == x_r).all()
-            # wh = x_l.clone().view(-1, H*C)
-            alpha_l = (x_l * self.att_l).sum(dim=-1)
-            alpha_r = (x_r * self.att_r).sum(dim=-1)
+            x_l = x_r = self.lin_l(x).view(-1, H, C)  # Wh 2708, 8, 8
+            assert (x_l == x_r).all()
+            wh = x_l.clone()  # 2708, 8, 8 
+            alpha_l = (x_l * self.att_l).sum(dim=-1)  # awhi 1, 8, 8 -> 2708, 8, 8 -> 2708, 8
+            alpha_r = (x_r * self.att_r).sum(dim=-1)  # awhj
         else:
             x_l, x_r = x[0], x[1]
             assert x[0].dim() == 2, 'Static graphs not supported in `GATConv`.'
@@ -206,8 +206,6 @@ class GAT4ConvSIGIR(MessagePassing):
 
         # Super-GAT
         num_neg_samples = int(edge_index.size(1))
-        # print('num_neg_samples', num_neg_samples)
-
         neg_edge_index = negative_sampling(
             edge_index=edge_index,
             num_nodes=x.size(0),
@@ -217,7 +215,7 @@ class GAT4ConvSIGIR(MessagePassing):
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
         edge_score, edge_label, new_edge, del_edge = self._get_new_edge(
-            out, edge_index, neg_edge_index)  # OUT
+            wh, edge_index, neg_edge_index)  # OUT
 
         # print('x', x, x.shape)
         # print('denser_edge_index', denser_edge_index, denser_edge_index.shape)
@@ -245,6 +243,7 @@ class GAT4ConvSIGIR(MessagePassing):
         alpha = softmax(alpha, index, ptr, size_i)
         self._alpha = alpha
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
+
         return x_j * alpha.unsqueeze(-1)
 
     def __repr__(self):
@@ -292,7 +291,9 @@ class GAT4ConvSIGIR(MessagePassing):
         # edge_score = torch.einsum("ef,xf->e",
         #                 torch.cat([x_i, x_j], dim=-1), # 26517, 32
         #                 self.a) # 1, 32
-        edge_score = torch.einsum("ef,ef->e", x_i, x_j)
+
+        edge_score = torch.einsum("ehf,ehf->e", x_i, x_j)
+
         # edge_score = torch.matmul(torch.cat([x_i, x_j], dim=-1), self.a)
         # print('edge_score', edge_score, edge_score.shape) # 26517, 1
         # edge_score = torch.sigmoid(s)
@@ -332,9 +333,12 @@ class GAT4ConvSIGIR(MessagePassing):
         # [E + neg_E]
         total_edge_index_j, total_edge_index_i = total_edge_index
         # [E + neg_E, heads * F]
+
         x_i = torch.index_select(x, 0, total_edge_index_i)
+
         # [E + neg_E, heads * F]
         x_j = torch.index_select(x, 0, total_edge_index_j)
+  
 
         edge_score = self._get_edge_score(x_i, x_j)
 
