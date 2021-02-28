@@ -352,7 +352,7 @@ class GAT4ConvSIGIR(MessagePassing):
 
         ###### SORTING #######
         # Forcing maximum 25 edges per step
-        max_num = 15
+        max_num = 20
         neg_edge_score = edge_score[edge_index.size(1):]
         _, sorted_indices = torch.sort(neg_edge_score, descending=True)
         new_edge = neg_edge_index[:, sorted_indices[:max_num]]
