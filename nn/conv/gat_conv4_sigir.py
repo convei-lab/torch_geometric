@@ -93,6 +93,7 @@ class GAT4ConvSIGIR(MessagePassing):
             self.register_parameter('bias', None)
 
         self.alpha = alpha
+        self.beta = beta
         self.r_scaling_1, self.r_bias_1 = Parameter(
             torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_2, self.r_bias_2 = Parameter(
@@ -162,8 +163,9 @@ class GAT4ConvSIGIR(MessagePassing):
             assert x.dim() == 2, 'Static graphs not supported in `GATConv`.'
             x_l = x_r = self.lin_l(x).view(-1, H, C)  # Wh 2708, 8, 8
             assert (x_l == x_r).all()
-            wh = x_l.clone()  # 2708, 8, 8 
-            alpha_l = (x_l * self.att_l).sum(dim=-1)  # awhi 1, 8, 8 -> 2708, 8, 8 -> 2708, 8
+            wh = x_l.clone()  # 2708, 8, 8
+            # awhi 1, 8, 8 -> 2708, 8, 8 -> 2708, 8
+            alpha_l = (x_l * self.att_l).sum(dim=-1)
             alpha_r = (x_r * self.att_r).sum(dim=-1)  # awhj
         else:
             x_l, x_r = x[0], x[1]
@@ -338,7 +340,6 @@ class GAT4ConvSIGIR(MessagePassing):
 
         # [E + neg_E, heads * F]
         x_j = torch.index_select(x, 0, total_edge_index_j)
-  
 
         edge_score = self._get_edge_score(x_i, x_j)
 
