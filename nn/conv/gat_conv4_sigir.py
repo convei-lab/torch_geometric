@@ -93,7 +93,6 @@ class GAT4ConvSIGIR(MessagePassing):
             self.register_parameter('bias', None)
 
         self.alpha = alpha
-        self.beta = beta
         self.r_scaling_1, self.r_bias_1 = Parameter(
             torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_2, self.r_bias_2 = Parameter(

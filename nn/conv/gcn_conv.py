@@ -149,6 +149,14 @@ class GCNConv(MessagePassing):
 
     def forward(self, x: Tensor, edge_index: Adj,
                 edge_weight: OptTensor = None) -> Tensor:
+
+        if edge_index.size(0) != 2:
+            out = torch.matmul(x, self.weight)
+            out = torch.matmul(edge_index, out)
+            if self.bias is not None:
+                out += self.bias
+            return out
+
         """"""
         if self.normalize:
             if isinstance(edge_index, Tensor):

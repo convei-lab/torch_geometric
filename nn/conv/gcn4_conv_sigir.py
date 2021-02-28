@@ -178,29 +178,16 @@ class GCN4ConvSIGIR(MessagePassing):
             elif name.startswith("r_bias"):
                 tgi.zeros(param)
 
-    def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None, params=None) -> Tensor:
+    def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None) -> Tensor:
         """"""
-
-        def log_grad(target, params, gradlog_path=None):
-            from torchviz import make_dot
-            import os.path as osp
-            gradlog_path = gradlog_path if gradlog_path else osp.dirname(
-                osp.realpath(__file__)) + "/test.pdf"
-            print('gradlog_path', gradlog_path)
-            assert str(gradlog_path).endswith(".pdf")
-            dot = make_dot(target, params=params)
-            dot.format = 'pdf'
-            dirname, filename = gradlog_path.rsplit('/', 1)
-            filename = filename.replace(".pdf", "")
-            dot.render(filename, directory=dirname, cleanup=True)
-            input()
 
         if edge_index.size(0) != 2:
             out = torch.matmul(x, self.weight)
-            log_grad(edge_index, params)
+            out = torch.matmul(edge_index, out)
             if self.bias is not None:
                 out += self.bias
             return out
+
         if self.normalize:
             if isinstance(edge_index, Tensor):
                 cache = self._cached_edge_index
@@ -208,7 +195,6 @@ class GCN4ConvSIGIR(MessagePassing):
                     edge_index, edge_weight = gcn_norm(  # yapf: disable
                         edge_index, edge_weight, x.size(self.node_dim),
                         self.improved, self.add_self_loops, dtype=x.dtype)
-                    log_grad(edge_index, params)
                     if self.cached:
                         self._cached_edge_index = (edge_index, edge_weight)
                 else:
