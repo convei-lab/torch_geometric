@@ -73,6 +73,7 @@ class GAT4ConvSIGIR(MessagePassing):
         self.negative_slope = negative_slope
         self.dropout = dropout
         self.add_self_loops = add_self_loops
+        self.beta = beta
         # self.weight = Parameter(torch.Tensor(in_channels, out_channels))
 
         if isinstance(in_channels, int):
@@ -161,8 +162,10 @@ class GAT4ConvSIGIR(MessagePassing):
         alpha_r: OptTensor = None
         if isinstance(x, Tensor):
             assert x.dim() == 2, 'Static graphs not supported in `GATConv`.'
+            # wh = self.lin_l(x).view(-1, H, C).clone()
+            # x_l = x_r = F.dropout(x, p=0.6, training=self.training)
             x_l = x_r = self.lin_l(x).view(-1, H, C)  # Wh 2708, 8, 8
-            assert (x_l == x_r).all()
+            # assert (x_l == x_r).all()
             wh = x_l.clone()  # 2708, 8, 8
             # awhi 1, 8, 8 -> 2708, 8, 8 -> 2708, 8
             alpha_l = (x_l * self.att_l).sum(dim=-1)
@@ -347,9 +350,27 @@ class GAT4ConvSIGIR(MessagePassing):
         edge_label[:edge_index.size(1)] = 1
         # print('edge_label', edge_label, edge_label.shape)
 
-        edge_mask = edge_score > self.alpha
-        edge_mask = edge_mask[edge_index.size(1):]
-        new_edge = neg_edge_index[:, edge_mask]
+        ###### SORTING #######
+        # Forcing maximum 25 edges per step
+        max_num = 15
+        neg_edge_score = edge_score[edge_index.size(1):]
+        _, sorted_indices = torch.sort(neg_edge_score, descending=True)
+        new_edge = neg_edge_index[:, sorted_indices[:max_num]]
+        new_edge_score = neg_edge_score[sorted_indices[:max_num]]
+
+        ###### THRESHOLD #######
+        edge_mask = new_edge_score > self.alpha
+        new_edge = new_edge[:, edge_mask]
+        # if new_edge.size(1) != 0:
+        #     print('1', neg_edge_index, neg_edge_index.shape)
+        #     print('0', neg_edge_score, neg_edge_score.shape)
+        #     print('1', sorted_indices, sorted_indices.shape)
+        #     print('2', sorted_indices[:50], sorted_indices[:50].shape)
+        #     print('3', new_edge, new_edge.shape)
+        #     print('4', new_edge_score, new_edge_score.shape)
+        #     print('5', edge_mask, edge_mask.shape)
+        #     print('6', new_edge, new_edge.shape)
+        #     input()
 
         edge_mask = edge_score < self.beta
         edge_mask = edge_mask[:edge_index.size(1)]
