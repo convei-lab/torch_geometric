@@ -369,38 +369,6 @@ class GCN4ConvSIGIR(MessagePassing):
 
         return edge_score
 
-    # def _get_new_edge(self, x, edge_index, neg_edge_index):
-    #     """
-    #     :param edge_index: [2, E]
-    #     :param neg_edge_index: [2, neg_E]]
-    #     :return: [E + neg_E, 1]
-    #     """
-
-    #     total_edge_index = torch.cat(
-    #         [edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
-
-    #     # [E + neg_E]
-    #     total_edge_index_j, total_edge_index_i = total_edge_index
-    #     # [E + neg_E, heads * F]
-    #     x_i = torch.index_select(x, 0, total_edge_index_i)
-    #     # [E + neg_E, heads * F]
-    #     x_j = torch.index_select(x, 0, total_edge_index_j)
-
-    #     edge_score = self._get_edge_score(x_i, x_j)
-
-    #     edge_label = torch.zeros_like(edge_score)
-    #     edge_label[:edge_index.size(1)] = 1
-
-    #     edge_mask = edge_score > self.alpha
-    #     edge_mask = edge_mask[edge_index.size(1):]
-    #     new_edge = neg_edge_index[:, edge_mask]
-
-    #     edge_mask = edge_score < self.beta
-    #     edge_mask = edge_mask[:edge_index.size(1)]
-    #     del_edge = edge_index[:, edge_mask]
-
-    #     return edge_score, edge_label, new_edge, del_edge
-
     def _get_new_edge(self, x, edge_index, neg_edge_index):
         """
         :param edge_index: [2, E]
@@ -410,16 +378,11 @@ class GCN4ConvSIGIR(MessagePassing):
 
         total_edge_index = torch.cat(
             [edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
-        # print('edge_index', edge_index, edge_index.shape)
-        # print('neg_edge_index', neg_edge_index, neg_edge_index.shape)
-        # print('total_edge_index', total_edge_index, total_edge_index.shape)
 
         # [E + neg_E]
         total_edge_index_j, total_edge_index_i = total_edge_index
         # [E + neg_E, heads * F]
-
         x_i = torch.index_select(x, 0, total_edge_index_i)
-
         # [E + neg_E, heads * F]
         x_j = torch.index_select(x, 0, total_edge_index_j)
 
@@ -427,35 +390,72 @@ class GCN4ConvSIGIR(MessagePassing):
 
         edge_label = torch.zeros_like(edge_score)
         edge_label[:edge_index.size(1)] = 1
-        # print('edge_label', edge_label, edge_label.shape)
 
-        ###### SORTING #######
-        # Forcing maximum 25 edges per step
-        max_num = 20
-        neg_edge_score = edge_score[edge_index.size(1):]
-        _, sorted_indices = torch.sort(neg_edge_score, descending=True)
-        new_edge = neg_edge_index[:, sorted_indices[:max_num]]
-        new_edge_score = neg_edge_score[sorted_indices[:max_num]]
-
-        ###### THRESHOLD #######
-        edge_mask = new_edge_score > self.alpha
-        new_edge = new_edge[:, edge_mask]
-        # if new_edge.size(1) != 0:
-        #     print('1', neg_edge_index, neg_edge_index.shape)
-        #     print('0', neg_edge_score, neg_edge_score.shape)
-        #     print('1', sorted_indices, sorted_indices.shape)
-        #     print('2', sorted_indices[:50], sorted_indices[:50].shape)
-        #     print('3', new_edge, new_edge.shape)
-        #     print('4', new_edge_score, new_edge_score.shape)
-        #     print('5', edge_mask, edge_mask.shape)
-        #     print('6', new_edge, new_edge.shape)
-        #     input()
+        edge_mask = edge_score > self.alpha
+        edge_mask = edge_mask[edge_index.size(1):]
+        new_edge = neg_edge_index[:, edge_mask]
 
         edge_mask = edge_score < self.beta
         edge_mask = edge_mask[:edge_index.size(1)]
         del_edge = edge_index[:, edge_mask]
 
         return edge_score, edge_label, new_edge, del_edge
+
+    # def _get_new_edge(self, x, edge_index, neg_edge_index):
+    #     """
+    #     :param edge_index: [2, E]
+    #     :param neg_edge_index: [2, neg_E]]
+    #     :return: [E + neg_E, 1]
+    #     """
+
+    #     total_edge_index = torch.cat(
+    #         [edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
+    #     # print('edge_index', edge_index, edge_index.shape)
+    #     # print('neg_edge_index', neg_edge_index, neg_edge_index.shape)
+    #     # print('total_edge_index', total_edge_index, total_edge_index.shape)
+
+    #     # [E + neg_E]
+    #     total_edge_index_j, total_edge_index_i = total_edge_index
+    #     # [E + neg_E, heads * F]
+
+    #     x_i = torch.index_select(x, 0, total_edge_index_i)
+
+    #     # [E + neg_E, heads * F]
+    #     x_j = torch.index_select(x, 0, total_edge_index_j)
+
+    #     edge_score = self._get_edge_score(x_i, x_j)
+
+    #     edge_label = torch.zeros_like(edge_score)
+    #     edge_label[:edge_index.size(1)] = 1
+    #     # print('edge_label', edge_label, edge_label.shape)
+
+    #     ###### SORTING #######
+    #     # Forcing maximum {x} edges per step
+    #     max_num = 15
+    #     neg_edge_score = edge_score[edge_index.size(1):]
+    #     _, sorted_indices = torch.sort(neg_edge_score, descending=True)
+    #     new_edge = neg_edge_index[:, sorted_indices[:max_num]]
+    #     new_edge_score = neg_edge_score[sorted_indices[:max_num]]
+
+    #     ###### THRESHOLD #######
+    #     edge_mask = new_edge_score > self.alpha
+    #     new_edge = new_edge[:, edge_mask]
+    #     # if new_edge.size(1) != 0:
+    #     #     print('1', neg_edge_index, neg_edge_index.shape)
+    #     #     print('0', neg_edge_score, neg_edge_score.shape)
+    #     #     print('1', sorted_indices, sorted_indices.shape)
+    #     #     print('2', sorted_indices[:50], sorted_indices[:50].shape)
+    #     #     print('3', new_edge, new_edge.shape)
+    #     #     print('4', new_edge_score, new_edge_score.shape)
+    #     #     print('5', edge_mask, edge_mask.shape)
+    #     #     print('6', new_edge, new_edge.shape)
+    #     #     input()
+
+    #     edge_mask = edge_score < self.beta
+    #     edge_mask = edge_mask[:edge_index.size(1)]
+    #     del_edge = edge_index[:, edge_mask]
+
+    #     return edge_score, edge_label, new_edge, del_edge
 
     @ staticmethod
     def loss(model):
