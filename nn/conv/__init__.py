@@ -41,6 +41,7 @@ from .top import TOP
 from .top2 import TOP2
 from .tenet import TENET
 from .gcn4_conv_sigir import GCN4ConvSIGIR
+from .gcn4_conv_sigir2 import GCN4ConvSIGIR2
 from .gat_conv4_sigir import GAT4ConvSIGIR
 
 __all__ = [
@@ -91,6 +92,7 @@ __all__ = [
     'GCN4ConvRMV',
     'TENET',
     'GCN4ConvSIGIR',
+    'GCN4ConvSIGIR2',
     'GAT4ConvSIGIR'
 ]
 

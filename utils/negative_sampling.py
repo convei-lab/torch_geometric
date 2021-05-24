@@ -77,6 +77,7 @@ def negative_sampling(edge_index, num_nodes=None, num_neg_samples=None,
         mask = torch.from_numpy(np.isin(perm, idx.to('cpu'))).to(torch.bool)
         perm = perm[~mask][:num_neg_samples].to(edge_index.device)
 
+
     if force_undirected:
         # (-sqrt((2 * N + 1)^2 - 8 * perm) + 2 * N + 1) / 2
         row = torch.floor((-torch.sqrt((2. * num_nodes + 1.)**2 - 8. * perm) +
@@ -85,6 +86,17 @@ def negative_sampling(edge_index, num_nodes=None, num_neg_samples=None,
         neg_edge_index = torch.stack([row, col], dim=0).long()
         neg_edge_index = to_undirected(neg_edge_index)
     else:
+        # node_degree = degree(edge_index[0], num_nodes=2708)
+        # zero = torch.zeros_like(node_degree)
+        # removed_node_degree = torch.where(node_degree > 3, zero, node_degree)
+        # removed_node_degree = torch.nonzero(removed_node_degree, as_tuple=False).squeeze(1).type(torch.FloatTensor)
+        # idx = removed_node_degree.multinomial(num_samples=perm.shape[0], replacement=True)
+        # row = removed_node_degree[idx].type(torch.LongTensor).cuda()
+
+        # removed_node_degree = torch.where(node_degree < 3, zero, node_degree)
+        # removed_node_degree = torch.nonzero(removed_node_degree, as_tuple=False).squeeze(1).type(torch.FloatTensor)
+        # idx = removed_node_degree.multinomial(num_samples=perm.shape[0], replacement=True)
+        # col = removed_node_degree[idx].type(torch.LongTensor).cuda()
         row = perm // num_nodes
         col = perm % num_nodes
         neg_edge_index = torch.stack([row, col], dim=0).long()

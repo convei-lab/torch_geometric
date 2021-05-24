@@ -121,7 +121,6 @@ class GAT4ConvSIGIR(MessagePassing):
             "edge_score": None,  # Use as sij for edge score.
             "edge_label": None,  # Use as label for sij for supervision.
             "new_edge": None,
-            "del_edge": None
         }
 
         self.reset_parameters()
@@ -349,19 +348,19 @@ class GAT4ConvSIGIR(MessagePassing):
         edge_mask = edge_mask[edge_index.size(1):]
         new_edge = neg_edge_index[:, edge_mask]
 
-        # node_degree = degree(edge_index[0], num_nodes=2708) - 1
-        # new_edge_0 = new_edge[0]
-        # new_edge_1 = new_edge[1]
+        node_degree = degree(edge_index[0], num_nodes=2708) -1
+        new_edge_0 = new_edge[0]
+        new_edge_1 = new_edge[1]
 
-        # if new_edge.shape[1] != 0:
-        #     for i in range(len(new_edge[0])):
-        #         if node_degree[new_edge[0][i]] < 1:
-        #             new_edge_0[i] = -1
-        #             new_edge_1[i] = -1
-        #     if -1 in new_edge[0]:
-        #         new_edge_0 = new_edge_0[new_edge_0 != -1]
-        #         new_edge_1 = new_edge_1[new_edge_1 != -1]
-        #         new_edge = torch.stack((new_edge_0, new_edge_1), dim=0)
+        if new_edge.shape[1] != 0: 
+            for i in range(len(new_edge[0])):
+                if node_degree[new_edge[0][i]] < 1:
+                    new_edge_0[i] = -1
+                    new_edge_1[i] = -1
+            if -1 in new_edge[0]:
+                new_edge_0 = new_edge_0[new_edge_0 != -1]
+                new_edge_1 = new_edge_1[new_edge_1 != -1]
+                new_edge = torch.stack((new_edge_0, new_edge_1), dim=0)
 
         edge_mask = edge_score < self.beta
         edge_mask = edge_mask[:edge_index.size(1)]

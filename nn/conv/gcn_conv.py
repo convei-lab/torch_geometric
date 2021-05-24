@@ -179,6 +179,10 @@ class GCNConv(MessagePassing):
                         self._cached_adj_t = edge_index
                 else:
                     edge_index = cache
+        x = x.float()
+        # print("xxxxx", x, x.shape)
+        # print("weight", self.weight, self.weight.shape)
+        
         x = torch.matmul(x, self.weight)
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
@@ -187,7 +191,7 @@ class GCNConv(MessagePassing):
 
         if self.bias is not None:
             out += self.bias
-
+    
         return out
 
     def message(self, x_j: Tensor, edge_weight: OptTensor) -> Tensor:

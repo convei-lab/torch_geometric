@@ -160,8 +160,6 @@ class GCN4ConvSIGIR(MessagePassing):
             "edge_score": None,  # Use as sij for edge score.
             "edge_label": None,  # Use as label for sij for supervision.
             "new_edge": None,
-            "del_edge": None,
-            "total_edge_index": None
         }
 
         self.reset_parameters()
@@ -214,7 +212,6 @@ class GCN4ConvSIGIR(MessagePassing):
                     edge_index = cache
 
         wh = torch.matmul(x, self.weight)
-
         out = self.propagate(edge_index, x=wh, edge_weight=edge_weight,
                              size=None)
 
@@ -238,7 +235,6 @@ class GCN4ConvSIGIR(MessagePassing):
 
         # Super-GAT
         num_neg_samples = int(edge_index.size(1))
-        # num_neg_samples = 10000
         # print('num_neg_samples', num_neg_samples)
 
         neg_edge_index = negative_sampling(
@@ -251,21 +247,16 @@ class GCN4ConvSIGIR(MessagePassing):
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
         # edge_score, edge_label, new_edge, del_edge = self._get_new_edge(
         #     wh, edge_index, neg_edge_index)  # OUT
-        edge_score, edge_label, new_edge, del_edge, total_edge_index = self._get_new_edge(
-            wh, edge_index, neg_edge_index)  # OUT
-
+        edge_score, edge_label, new_edge, del_edge = self._get_new_edge(
+                wh, edge_index, neg_edge_index)  # OUT
         # print('x', x, x.shape)
         # print('denser_edge_index', denser_edge_index, denser_edge_index.shape)
         # print('new_edge_index', denser_edge_index, denser_edge_index.shape)
-        if self.training:
-            self._update_cache("edge_score", edge_score)
-            self._update_cache("edge_label", edge_label)
-            self._update_cache("new_edge", new_edge)
-            # print('cache_new_edge',
-            #       self.cache["new_edge"], self.cache["new_edge"].shape)
-            # input()
-            self._update_cache("del_edge", del_edge)
-            self._update_cache("total_edge_index", total_edge_index)
+
+        self._update_cache("edge_score", edge_score)
+        self._update_cache("edge_label", edge_label)
+        self._update_cache("new_edge", new_edge)
+        self._update_cache("del_edge", del_edge)
 
         # # Super-GAT
         # num_neg_samples = int(edge_index.size(1))
@@ -319,6 +310,7 @@ class GCN4ConvSIGIR(MessagePassing):
         #     return all_combinations_matrix.view(N, N, 2 * 16) #self.out_features)
 
     def _update_cache(self, key, val):
+
         if key == "new_edge" and self.cache["new_edge"] == None and len(val[0]) != 0:
             self.cache["new_edge"] = val
         elif key == "new_edge" and self.cache["new_edge"] != None and len(val[0]) != 0:
@@ -336,24 +328,7 @@ class GCN4ConvSIGIR(MessagePassing):
             # print('ab',ab)
             self.cache["new_edge"] = ab
 
-        if key == "del_edge" and self.cache["del_edge"] == None and len(val[0]) != 0:
-            self.cache["del_edge"] = val
-        elif key == "del_edge" and self.cache["del_edge"] != None and len(val[0]) != 0:
-            prev = self.cache["del_edge"]
-            # print('prev', prev)
-            # print('prev[0]', prev[0], prev[0].shape)
-            # print('val[0]', val[0], val[0].shape)
-            a = torch.cat((prev[0], val[0]), dim=-1).unsqueeze(0)
-            # print('a', a)
-            # print('prev[1]', prev[1], prev[1].shape)
-            # print('val[1]', val[1], val[1].shape)
-            b = torch.cat((prev[1], val[1]), dim=-1).unsqueeze(0)
-            # print('b',b)
-            ab = torch.cat((a, b), dim=0)
-            # print('ab',ab)
-            self.cache["del_edge"] = ab
-
-        if key == "edge_score" or key == "edge_label" or key == "total_edge_index":
+        if key == "edge_score" or key == "edge_label":
             self.cache[key] = val
 
         # self.cache[key] = val
@@ -393,7 +368,7 @@ class GCN4ConvSIGIR(MessagePassing):
         # edge_score = self.r_scaling_9 * F.elu(edge_score) + self.r_bias_9
         # edge_score = self.r_scaling_10 * F.elu(edge_score) + self.r_bias_10
 
-        return edge_score  # , torch.max(edge_score)
+        return edge_score
 
     def _get_new_edge(self, x, edge_index, neg_edge_index):
         """
@@ -412,23 +387,18 @@ class GCN4ConvSIGIR(MessagePassing):
         # [E + neg_E, heads * F]
         x_j = torch.index_select(x, 0, total_edge_index_j)
 
-        # node_degree = degree(edge_index[0], num_nodes=2708) - 1
-        # total_node_degree = node_degree + node_degree
+        # node_degree = degree(edge_index[0], num_nodes=2708)
+        # total_node_degree = 1/(node_degree[total_edge_index_i] + node_degree[total_edge_index_j])
 
+        edge_score = self._get_edge_score(x_i, x_j) 
         # print(edge_score, total_node_degree)
-
+   
         # edge_score = edge_score * total_node_degree
         # print(edge_score)
         # print('edge_score', edge_score)
-
-        edge_score = self._get_edge_score(x_i, x_j)
-
+  
         edge_label = torch.zeros_like(edge_score)
         edge_label[:edge_index.size(1)] = 1
-
-        edge_mask = edge_score > self.alpha
-        edge_mask = edge_mask[edge_index.size(1):]
-        new_edge = neg_edge_index[:, edge_mask]
 
         # torch.set_printoptions(edgeitems=50)
         # node_degree = degree(edge_index[0], num_nodes=2708) - 1
@@ -442,27 +412,16 @@ class GCN4ConvSIGIR(MessagePassing):
         # mask_by_degree = torch.Tensor(mask_by_degree).cuda()
         # edge_score = torch.mul(mask_by_degree, edge_score)
 
-        # print('edge_score_before', edge_score, edge_score.shape)
-
-        # edge_score_max = edge_score[edge_index.size(1):]
-        # alpha = torch.max(edge_score_max)
-        # edge_mask = edge_score_max >= alpha
-        # new_edge = neg_edge_index[:, edge_mask]
-
-        # alpha = max(max_edge_score/1.5, self.alpha) - 0.0001
-        # print(alpha, max_edge_score/1.5, self.alpha)
-        # input()
-        # edge_mask = edge_score > alpha
-
-        # print(new_edge, new_edge.shape)
-        # input()
+        edge_mask = edge_score > self.alpha
+        edge_mask = edge_mask[edge_index.size(1):]
+        new_edge = neg_edge_index[:, edge_mask]
 
         # new_edge_0 = new_edge[0]
         # new_edge_1 = new_edge[1]
 
         # if new_edge.shape[1] != 0:
         #     for i in range(len(new_edge[0])):
-        #         if total_node_degree[new_edge[0][i]] < 2:
+        #         if node_degree[new_edge[0][i]] < 4:
         #             new_edge_0[i] = -1
         #             new_edge_1[i] = -1
         #     if -1 in new_edge[0]:
@@ -474,7 +433,7 @@ class GCN4ConvSIGIR(MessagePassing):
         edge_mask = edge_mask[:edge_index.size(1)]
         del_edge = edge_index[:, edge_mask]
 
-        return edge_score, edge_label, new_edge, del_edge, total_edge_index
+        return edge_score, edge_label, new_edge, del_edge
 
     # def _get_new_edge(self, x, edge_index, neg_edge_index):
     #     """
@@ -550,8 +509,6 @@ class GCN4ConvSIGIR(MessagePassing):
 
             permuted = torch.randperm(num_total_samples)
             permuted = permuted.to(device)
-            # print(score, score.shape, num_total_samples,permuted, permuted.shape)
-            # input()
             # print('label[--permuted]', label[permuted], label[permuted].shape)
             # print(label[label>0], label[label>0].shape)
 
